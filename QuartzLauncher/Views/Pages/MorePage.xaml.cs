@@ -48,12 +48,7 @@ public partial class MorePage : Page, IStandaloneSidebarPage
             NavPreset5.IsChecked = true;
             MoreFrame.Navigate(new DownloadCenterPage());
         }
-        else if (InitialTab == "MapDownload")
-        {
-            FooterHint.Visibility = Visibility.Collapsed;
-            NavMapDownload.IsChecked = true;
-            MoreFrame.Navigate(new MapDownloadPage());
-        }
+
         else
         {
             FooterHint.Visibility = Visibility.Collapsed;
@@ -157,7 +152,6 @@ public partial class MorePage : Page, IStandaloneSidebarPage
         NavPreset3.IsChecked = page is AnimationSettingsPage;
         NavPreset4.IsChecked = page is WebsiteSitesPage;
         NavPreset5.IsChecked = page is DownloadCenterPage;
-        NavMapDownload.IsChecked = page is MapDownloadPage;
         NavPreset6.IsChecked = page is SkinPreviewPage or SkinLibraryPage;
     }
 
@@ -166,7 +160,6 @@ public partial class MorePage : Page, IStandaloneSidebarPage
     private void NavPreset3_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new AnimationSettingsPage()); }
     private void NavPreset4_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new WebsiteSitesPage()); }
     private void NavPreset5_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new DownloadCenterPage(true)); }
-    private void NavMapDownload_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new MapDownloadPage()); }
     private void NavPreset6_Click(object sender, RoutedEventArgs e) { SetFooterHint(true); NavigateContent(new SkinPreviewPage()); }
 
     public void NavigateToSkinLibrary() { SetFooterHint(true); NavigateContent(new SkinLibraryPage()); }
