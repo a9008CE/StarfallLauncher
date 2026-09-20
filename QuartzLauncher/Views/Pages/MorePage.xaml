@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.MorePage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.MorePage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:services="clr-namespace:QuartzLauncher.Services"
@@ -64,14 +64,6 @@
                             <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="15"
                                        Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
                             <TextBlock Text="下载管理" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </RadioButton>
-                    <RadioButton x:Name="NavMapDownload" Style="{DynamicResource NavBtn}" GroupName="MoreNav"
-                                 Click="NavMapDownload_Click">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                            <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                       Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <TextBlock Text="地图下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
                     <RadioButton x:Name="NavPreset6" Style="{DynamicResource NavBtn}" GroupName="MoreNav"
