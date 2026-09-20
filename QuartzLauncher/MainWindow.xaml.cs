@@ -410,8 +410,15 @@ public partial class MainWindow : Window
         }
     }
 
-    private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateTo(HomePage);
-    public void NavigateToHome() => NavigateTo(HomePage);
+    private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateToHome();
+
+    public void NavigateToHome()
+    {
+        // 首页实例列表只在首次加载时读取一次，回到首页时重新刷新，
+        // 这样「添加已有文件夹」等操作后无需重启启动器就能在首页选到新版本
+        _homePage?.RefreshInstances();
+        NavigateTo(HomePage);
+    }
 
     /// <summary>联机大厅「一键启动并加入」：回首页并启动游戏。</summary>
     public void StartQuickPlay()

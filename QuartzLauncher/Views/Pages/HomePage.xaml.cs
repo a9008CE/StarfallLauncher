@@ -133,7 +133,8 @@ public partial class HomePage : Page
     private static string GetInitial(string name) =>
         string.IsNullOrWhiteSpace(name) ? "?" : name[..1].ToUpperInvariant();
 
-    private void RefreshInstances()
+    /// <summary>重新读取实例列表（保留当前选中项）。回到首页时调用，保证新增/导入的版本立即可选。</summary>
+    public void RefreshInstances()
     {
         var selectedId = (InstanceSelector.SelectedItem as ComboBoxItem)?.Tag is Instance selected
             ? selected.Id
@@ -162,7 +163,7 @@ public partial class HomePage : Page
                 var localInstance = new Instance
                 {
                     Id = $"local-{versionId}",
-                    Name = "原版",
+                    Name = versionId,
                     VersionId = versionId,
                     McVersion = versionId,
                     Loader = "vanilla",
@@ -192,7 +193,15 @@ public partial class HomePage : Page
 
     private static ComboBoxItem CreateInstanceComboItem(Instance instance)
     {
-        var displayName = string.IsNullOrWhiteSpace(instance.Name) ? instance.McVersion : instance.Name;
+        // 名称缺失或只是游戏文件夹名（如 .minecraft、原版）时改为显示版本号，
+        // 否则多个版本的实例在首页会看不出区别
+        var versionLabel = string.IsNullOrWhiteSpace(instance.VersionId) ? instance.McVersion : instance.VersionId;
+        var name = instance.Name;
+        var generic = string.IsNullOrWhiteSpace(name)
+                      || name.StartsWith(".", StringComparison.Ordinal)
+                      || name.Equals("原版", StringComparison.Ordinal)
+                      || name.Equals("minecraft", StringComparison.OrdinalIgnoreCase);
+        var displayName = generic && !string.IsNullOrWhiteSpace(versionLabel) ? versionLabel : name;
         return new ComboBoxItem
         {
             Content = displayName,
@@ -442,6 +451,8 @@ public partial class HomePage : Page
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 CreateNoWindow = true
             };
             foreach (var argument in args)

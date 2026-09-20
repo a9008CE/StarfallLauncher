@@ -1,0 +1,154 @@
+<Page x:Class="QuartzLauncher.Views.Pages.MapDownloadPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="地图下载">
+    <Grid Margin="20,16,20,16">
+
+        <!-- ===== 列表视图 ===== -->
+        <Grid x:Name="ListView">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="地图下载" FontSize="18" FontWeight="Bold"
+                           Foreground="{DynamicResource TextBrush}"/>
+                <TextBlock Text="来自 zh.mapcraft.me 的 Java 版地图（免费直链）。下载后自行解压，把存档文件夹放进 saves 目录。"
+                           FontSize="11" TextWrapping="Wrap" Margin="0,5,0,10"
+                           Foreground="{DynamicResource TextMutedBrush}"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <ComboBox x:Name="CategoryBox" Width="150" Height="30"
+                              SelectionChanged="Category_Changed"/>
+                    <Button Content="刷新" Style="{DynamicResource BtnBase}" Height="30" Padding="12,2"
+                            Margin="8,0,0,0" Click="Refresh_Click"/>
+                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="10,0,0,0"
+                               FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
+                </StackPanel>
+            </StackPanel>
+
+            <ScrollViewer x:Name="MapScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          SizeChanged="MapScroll_SizeChanged">
+                <ItemsControl x:Name="MapList">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="10" BorderThickness="1" Padding="14" Cursor="Hand"
+                                    Margin="0,0,10,10" MouseLeftButtonUp="Card_Click" Tag="{Binding}"
+                                    Background="{DynamicResource DialogCardBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,14,0" VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="Bold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                        <TextBlock Text="{Binding Description}" FontSize="12" TextWrapping="Wrap"
+                                                   LineHeight="20" Height="80"
+                                                   TextTrimming="CharacterEllipsis" Margin="0,8,0,14"
+                                                   Foreground="{DynamicResource TextBrush}"/>
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border CornerRadius="4" Padding="9,4" Margin="0,0,7,0"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource BorderBrush}">
+                                                <TextBlock Text="{Binding VersionLabel, Mode=OneWay}" FontSize="12"
+                                                           Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Border CornerRadius="4" BorderThickness="1" Padding="9,3"
+                                                    Margin="0,0,12,0" VerticalAlignment="Center"
+                                                    BorderBrush="{DynamicResource BorderBrush}">
+                                                <TextBlock Text="{Binding SizeLabel, Mode=OneWay}" FontSize="12"
+                                                           Foreground="{DynamicResource TextBrush}"/>
+                                            </Border>
+                                            <Button Content="阅读更多 →" Style="{DynamicResource BtnPrimary}"
+                                                    Height="32" FontSize="12" Padding="13,2"
+                                                    Click="ReadMore_Click" Tag="{Binding}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Border Grid.Column="1" CornerRadius="6" ClipToBounds="True"
+                                            Width="190" Height="128"
+                                            Background="{DynamicResource BorderBrush}">
+                                        <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"/>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+                <Button x:Name="PrevBtn" Content="上一页" Style="{DynamicResource BtnBase}"
+                        Height="30" Padding="14,2" Click="Prev_Click"/>
+                <TextBlock x:Name="PageText" VerticalAlignment="Center" Margin="14,0" FontSize="12"
+                           Foreground="{DynamicResource TextBrush}"/>
+                <Button x:Name="NextBtn" Content="下一页" Style="{DynamicResource BtnBase}"
+                        Height="30" Padding="14,2" Click="Next_Click"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ===== 详情视图（点击卡片后显示，列表被推到一边）===== -->
+        <Grid x:Name="DetailView" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Button Grid.Row="0" Content="← 返回列表" Style="{DynamicResource BtnBase}" Height="32"
+                    Background="{DynamicResource InputBgBrush}"
+                    Padding="14,2" HorizontalAlignment="Left" Margin="0,0,0,12" Click="Back_Click"/>
+
+            <Border Grid.Row="1" CornerRadius="12" BorderThickness="1" Padding="22"
+                    Background="{DynamicResource DialogCardBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                        <TextBlock x:Name="DetailTitle" FontSize="24" FontWeight="Bold"
+                                   TextWrapping="Wrap" Foreground="{DynamicResource TextBrush}"/>
+                        <TextBlock x:Name="DetailDescription" FontSize="13" TextWrapping="Wrap"
+                                   LineHeight="22" Margin="0,14,0,18"
+                                   Foreground="{DynamicResource TextBrush}"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Border CornerRadius="4" Background="{DynamicResource BorderBrush}"
+                                    Padding="8,4" Margin="0,0,8,0" VerticalAlignment="Center">
+                                <TextBlock x:Name="DetailVersion" FontSize="12"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                            </Border>
+                            <Border CornerRadius="4" BorderThickness="1" Padding="8,3" Margin="0,0,12,0"
+                                    VerticalAlignment="Center"
+                                    BorderBrush="{DynamicResource BorderBrush}">
+                                <TextBlock x:Name="DetailSize" FontSize="12"
+                                           Foreground="{DynamicResource TextBrush}"/>
+                            </Border>
+                            <Button Content="下载地图 →" Style="{DynamicResource BtnPrimary}" Height="34"
+                                    FontSize="13" Padding="14,2" Click="DetailDownload_Click"/>
+                            <Button Content="在浏览器打开" Style="{DynamicResource BtnBase}" Height="34"
+                                    FontSize="12" Padding="12,2" Margin="8,0,0,0" Click="OpenInBrowser_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Grid.Column="1" CornerRadius="8" ClipToBounds="True" Width="380" Height="240"
+                            Background="{DynamicResource BorderBrush}">
+                        <Image x:Name="DetailImage" Stretch="UniformToFill"/>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Page>

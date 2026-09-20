@@ -294,7 +294,7 @@ public class LoaderService
         var items = ReadInstallerLibraries(installer);
         if (items.Count == 0) return;
 
-        var workers = Math.Clamp(_settings.Data.DownloadWorkers, 1, 8);
+        var workers = Math.Clamp(_settings.Data.DownloadWorkers, 1, 64);
         await Parallel.ForEachAsync(items, new ParallelOptions { MaxDegreeOfParallelism = workers },
             async (item, cancellationToken) =>
             {

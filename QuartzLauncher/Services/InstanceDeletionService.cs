@@ -16,7 +16,7 @@ public static class InstanceDeletionService
             if (string.IsNullOrWhiteSpace(versionId)) return;
             var localVersionRoot = Path.GetFullPath(Path.Combine(paths.VersionsDir, versionId));
             EnsureDirectChild(paths.VersionsDir, localVersionRoot);
-            if (Directory.Exists(localVersionRoot)) Directory.Delete(localVersionRoot, true);
+            DeleteDirectory(localVersionRoot);
             return;
         }
 
@@ -47,7 +47,38 @@ public static class InstanceDeletionService
 
     private static void DeleteDirectory(string path)
     {
-        if (Directory.Exists(path)) Directory.Delete(path, true);
+        if (!Directory.Exists(path)) return;
+
+        // 「添加已有文件夹」导入的版本以目录联接方式接入，
+        // 删除时只能删掉链接本身，绝不能删到外部原文件夹里的游戏文件
+        if (new DirectoryInfo(path).Attributes.HasFlag(FileAttributes.ReparsePoint))
+        {
+            try
+            {
+                Directory.Delete(path);
+                return;
+            }
+            catch
+            {
+                try
+                {
+                    using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "cmd.exe", $"/c rmdir \"{path}\"")
+                    {
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    });
+                    process?.WaitForExit(5000);
+                }
+                catch
+                {
+                    // 删除链接失败时保留目录，避免误删外部文件
+                }
+                return;
+            }
+        }
+
+        Directory.Delete(path, true);
     }
 
     private static void EnsureDirectChild(string parent, string child)

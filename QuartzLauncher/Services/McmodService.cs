@@ -60,6 +60,7 @@ public static partial class McmodService
                 if (!idMatch.Success || !nameMatch.Success) continue;
                 var summaryMatch = PopularSummaryRegex().Match(block);
                 var iconMatch = PopularIconRegex().Match(block);
+                var englishMatch = PopularEnglishNameRegex().Match(block);
                 var id = idMatch.Groups["id"].Value;
                 var pageUrl = $"https://www.mcmod.cn/class/{id}.html";
                 var iconUrl = iconMatch.Success ? WebUtility.HtmlDecode(iconMatch.Groups["icon"].Value) : "";
@@ -68,7 +69,7 @@ public static partial class McmodService
                 {
                     Id = id,
                     Name = HtmlDecode(nameMatch.Groups["name"].Value),
-                    OriginalName = HtmlDecode(nameMatch.Groups["name"].Value),
+                    OriginalName = englishMatch.Success ? HtmlDecode(englishMatch.Groups["name"].Value) : "",
                     Summary = summaryMatch.Success ? HtmlDecode(summaryMatch.Groups["summary"].Value) : "",
                     IconUrl = iconUrl,
                     PageUrl = pageUrl,
@@ -103,6 +104,70 @@ public static partial class McmodService
         {
             return "";
         }
+    }
+
+    /// <summary>从模组页补全支持的加载器与 MC 版本（结果写入本地缓存）。</summary>
+    public static async Task FillSupportAsync(ModItem item, CancellationToken ct = default)
+    {
+        var pageUrl = !string.IsNullOrWhiteSpace(item.McmodPageUrl) ? item.McmodPageUrl : item.PageUrl;
+        if (string.IsNullOrWhiteSpace(pageUrl)) return;
+
+        var cacheKey = $"mcmod-support:{pageUrl}";
+        var cached = ImageCacheService.GetText(cacheKey);
+        if (cached == null)
+        {
+            try
+            {
+                var html = await Http.GetStringAsync(pageUrl, ct);
+                cached = string.Join(",", ParseSupportedLoaders(html)) + "|" +
+                         string.Join(",", ParseSupportedVersions(html));
+                ImageCacheService.SetText(cacheKey, cached);
+            }
+            catch
+            {
+                return;
+            }
+        }
+
+        var parts = cached.Split('|');
+        if (parts.Length != 2) return;
+
+        var loaders = parts[0].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        var versions = parts[1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+        if (loaders.Count > 0) item.Loaders = loaders;
+        if (versions.Count > 0) item.Versions = versions;
+    }
+
+    private static List<string> ParseSupportedLoaders(string html)
+    {
+        var result = new List<string>();
+        var match = Regex.Match(html, "运作方式[:：](?<value>.*?)</li>", RegexOptions.Singleline);
+        if (!match.Success) return result;
+
+        foreach (Match link in Regex.Matches(match.Groups["value"].Value, "<a[^>]*>(?<name>[^<]+)</a>"))
+        {
+            var name = WebUtility.HtmlDecode(link.Groups["name"].Value).Trim();
+            if (name.Length > 0 && !result.Contains(name, StringComparer.OrdinalIgnoreCase))
+                result.Add(name);
+        }
+        return result;
+    }
+
+    private static List<string> ParseSupportedVersions(string html)
+    {
+        var result = new List<string>();
+        var marker = html.IndexOf("支持的MC版本", StringComparison.Ordinal);
+        if (marker < 0) return result;
+
+        var block = html[marker..Math.Min(html.Length, marker + 4000)];
+        foreach (Match match in Regex.Matches(block, "mcver=(?<version>[^\"&]+)\""))
+        {
+            var version = WebUtility.HtmlDecode(match.Groups["version"].Value).Trim();
+            if (version.Length == 0 || result.Contains(version, StringComparer.OrdinalIgnoreCase)) continue;
+            result.Add(version);
+            if (result.Count >= 6) break;
+        }
+        return result;
     }
 
     public static async Task<McmodDetail> GetDetailAsync(string pageUrl)
@@ -333,6 +398,9 @@ td, th { border: 1px solid #3a4652; padding: 6px 8px; }
 
     [GeneratedRegex(@"<p\s+class=[""']name[""'][^>]*>\s*<a[^>]*>(?<name>.*?)</a>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex PopularNameRegex();
+
+    [GeneratedRegex(@"<p\s+class=[""']ename[""'][^>]*>\s*<a[^>]*>(?<name>.*?)</a>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    private static partial Regex PopularEnglishNameRegex();
 
     [GeneratedRegex(@"<[^>]+>")]
     private static partial Regex HtmlTagRegex();

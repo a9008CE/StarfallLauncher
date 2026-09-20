@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -6,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -26,10 +28,8 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
     private sealed record CategoryDef(string Label, string MrSlug, string CfId);
 
     private static readonly HttpClient IconHttp = CreateIconHttpClient();
-    private static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, BitmapImage> DetailImageCache = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, string> ResolvedIconCache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, (DateTime Expires, List<ModItem> Items, int Total)> PopularCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, bool> NameLookupAttempted = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object PopularCacheLock = new();
     private List<ModItem> _currentMods = new();
     private ModItem? _selectedMod;
@@ -184,17 +184,31 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         var headerDelay = quick ? 20 : 70;
         var resultsDelay = quick ? 45 : 150;
         var sidebarEase = new CubicEase { EasingMode = EasingMode.EaseOut };
-        ((TranslateTransform)Sidebar.RenderTransform).BeginAnimation(TranslateTransform.XProperty,
+        if (Sidebar.RenderTransform is not TranslateTransform sidebarTransform)
+        {
+            sidebarTransform = new TranslateTransform();
+            Sidebar.RenderTransform = sidebarTransform;
+        }
+        sidebarTransform.BeginAnimation(TranslateTransform.XProperty,
             new DoubleAnimation(quick ? -24 : -42, 0, TimeSpan.FromMilliseconds(sidebarDuration)) { EasingFunction = sidebarEase });
 
-        ((TranslateTransform)SearchHeader.RenderTransform).BeginAnimation(TranslateTransform.YProperty,
+        if (SearchHeader.RenderTransform is not TranslateTransform headerTransform)
+        {
+            headerTransform = new TranslateTransform();
+            SearchHeader.RenderTransform = headerTransform;
+        }
+        headerTransform.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimation(quick ? -8 : -14, 0, TimeSpan.FromMilliseconds(headerDuration))
             {
                 BeginTime = TimeSpan.FromMilliseconds(headerDelay),
                 EasingFunction = sidebarEase
             });
 
-        var resultsTransform = (TranslateTransform)ResultsPanel.RenderTransform;
+        if (ResultsPanel.RenderTransform is not TranslateTransform resultsTransform)
+        {
+            resultsTransform = new TranslateTransform();
+            ResultsPanel.RenderTransform = resultsTransform;
+        }
         resultsTransform.BeginAnimation(TranslateTransform.XProperty,
             new DoubleAnimation(quick ? 12 : 22, 0, TimeSpan.FromMilliseconds(resultsDuration))
             {
@@ -383,6 +397,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
                 CountText.Visibility = Visibility.Visible;
                 foreach (var mod in _currentMods)
                     ModList.Items.Add(CreateModItem(mod));
+                _ = FillModMetadataAsync(_currentMods.ToList());
                 UpdatePager();
             }
             else
@@ -510,6 +525,37 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
         transform.BeginAnimation(TranslateTransform.XProperty,
             new DoubleAnimation(24, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+    }
+
+    private bool _mapPanelWired;
+
+    private void NavMap_Click(object sender, RoutedEventArgs e)
+    {
+        BeginContentRequest();
+
+        // 切到其他侧栏项时自动收起地图页（只需挂一次）
+        if (!_mapPanelWired)
+        {
+            _mapPanelWired = true;
+            foreach (var nav in new[] { NavSearch, NavModpacks, NavShaders, NavResourcePacks, NavJava, NavDownloads, NavSettings })
+                nav.Checked += (_, _) => MapPage.Visibility = Visibility.Collapsed;
+        }
+
+        BrowserContent.Visibility = Visibility.Collapsed;
+        JavaPage.Visibility = Visibility.Collapsed;
+        DownloadPage.Visibility = Visibility.Collapsed;
+        MapPage.Visibility = Visibility.Visible;
+        MapPage.Opacity = 0;
+        var transform = new TranslateTransform(24, 0);
+        MapPage.RenderTransform = transform;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        MapPage.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+        transform.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(24, 0, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease });
+
+        if (MapPage.Content == null)
+            MapPage.Navigate(new MapDownloadPage());
     }
 
     private void NavJava_Click(object sender, RoutedEventArgs e)
@@ -694,6 +740,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
             foreach (var mod in _currentMods)
                 ModList.Items.Add(CreateModItem(mod));
+            _ = FillModMetadataAsync(_currentMods.ToList());
         }
         catch (Exception ex)
         {
@@ -895,14 +942,13 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         var aliases = new Dictionary<string, ModItem>(StringComparer.OrdinalIgnoreCase);
         foreach (var mcmod in mcmodMatches)
         {
-            var originalName = mcmod.Name;
-            mcmod.OriginalName = originalName;
-            var chineseName = GetChineseMcmodName(originalName);
-            mcmod.Name = chineseName;
+            var rawName = string.IsNullOrWhiteSpace(mcmod.OriginalName) ? mcmod.Name : mcmod.OriginalName;
+            mcmod.OriginalName = rawName;
+            mcmod.Name = GetChineseMcmodName(rawName);
             mcmod.McmodId = mcmod.Id;
             mcmod.McmodPageUrl = mcmod.PageUrl;
 
-            foreach (var alias in GetMcmodAliases(originalName))
+            foreach (var alias in GetMcmodAliases(mcmod.Name).Concat(GetMcmodAliases(mcmod.OriginalName)))
             {
                 var key = NormalizeName(alias);
                 if (!string.IsNullOrEmpty(key)) aliases.TryAdd(key, mcmod);
@@ -911,18 +957,29 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
         foreach (var mod in mods.Where(mod => mod.Source != ModSource.MCmod))
         {
-            var nameKey = NormalizeName(mod.Name);
-            var slugKey = NormalizeName(mod.Slug);
-            if (aliases.TryGetValue(nameKey, out var mcmod) ||
-                (!string.IsNullOrEmpty(slugKey) && aliases.TryGetValue(slugKey, out mcmod)))
-            {
-                mod.OriginalName = mcmod.OriginalName;
-                mod.Name = mcmod.Name;
-                mod.Summary = mcmod.Summary;
-                mod.McmodId = mcmod.Id;
-                mod.McmodPageUrl = mcmod.PageUrl;
-            }
+            var match = FindAlias(aliases, mod.Name) ?? FindAlias(aliases, mod.Slug);
+            if (match == null) continue;
+            mod.OriginalName = match.OriginalName;
+            mod.Name = match.Name;
+            mod.Summary = match.Summary;
+            mod.McmodId = match.Id;
+            mod.McmodPageUrl = match.PageUrl;
         }
+    }
+
+    private static ModItem? FindAlias(Dictionary<string, ModItem> aliases, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        if (aliases.TryGetValue(NormalizeName(name), out var match)) return match;
+        var baseKey = BaseName(name);
+        return baseKey.Length > 0 && aliases.TryGetValue(baseKey, out match) ? match : null;
+    }
+
+    private static string BaseName(string name)
+    {
+        var text = Regex.Replace(name, @"^\s*\[[^\]]+\]\s*", "");
+        text = Regex.Replace(text, @"[（(][^（）()]*[）)]", " ");
+        return NormalizeName(text);
     }
 
     private static IEnumerable<string> GetMcmodAliases(string name)
@@ -955,6 +1012,115 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
     private static bool ContainsChinese(string text) =>
         text.Any(character => character is >= '\u3400' and <= '\u9fff');
+
+    private static async Task FillModMetadataAsync(IReadOnlyList<ModItem> mods)
+    {
+        var pending = mods
+            .Where(mod => mod.Source == ModSource.MCmod
+                ? mod.Loaders.Count == 0 && mod.Versions.Count == 0
+                : string.IsNullOrWhiteSpace(mod.McmodId))
+            .ToList();
+
+        foreach (var chunk in pending.Chunk(3))
+        {
+            var tasks = chunk.Select(mod => mod.Source == ModSource.MCmod
+                ? McmodService.FillSupportAsync(mod)
+                : FillChineseNameAsync(mod));
+            await Task.WhenAll(tasks);
+            await Task.Delay(120);
+        }
+    }
+
+    private static async Task FillChineseNameAsync(ModItem mod)
+    {
+        try
+        {
+            var cacheKey = $"mcmod-name:{mod.Source}:{mod.Id}:{mod.Slug}";
+            var cached = ImageCacheService.GetText(cacheKey);
+            if (cached == null)
+            {
+                if (!NameLookupAttempted.TryAdd(cacheKey, true)) return;
+
+                var queries = new List<string>();
+                var baseQuery = SanitizeQuery(string.IsNullOrWhiteSpace(mod.OriginalName) ? mod.Name : mod.OriginalName);
+                if (baseQuery.Length > 0) queries.Add(baseQuery);
+                if (mod.Slug.Length >= 3 && !queries.Contains(mod.Slug, StringComparer.OrdinalIgnoreCase))
+                    queries.Add(mod.Slug);
+
+                var responded = false;
+                for (var pass = 0; pass < 2 && cached == null; pass++)
+                {
+                    if (pass > 0) await Task.Delay(2000);
+                    foreach (var query in queries)
+                    {
+                        var results = await McmodService.SearchModsAsync(query, 5);
+                        if (results.Count > 0) responded = true;
+                        var matched = results.FirstOrDefault(candidate => IsNameMatch(mod, candidate));
+                        if (matched == null) continue;
+
+                        cached = $"{matched.Id}|{GetChineseMcmodName(string.IsNullOrWhiteSpace(matched.OriginalName) ? matched.Name : matched.OriginalName)}|{matched.PageUrl}";
+                        break;
+                    }
+                    if (responded) break;
+                }
+
+                if (cached != null)
+                    ImageCacheService.SetText(cacheKey, cached);
+                else if (responded)
+                {
+                    cached = "";
+                    ImageCacheService.SetText(cacheKey, cached);
+                }
+                else
+                {
+                    NameLookupAttempted.TryRemove(cacheKey, out _);
+                    return;
+                }
+            }
+            if (cached.Length == 0) return;
+
+            var parts = cached.Split('|', 3);
+            if (parts.Length < 3) return;
+
+            mod.McmodId = parts[0];
+            mod.McmodPageUrl = parts[2];
+            if (parts[1].Length > 0)
+            {
+                if (string.IsNullOrWhiteSpace(mod.OriginalName)) mod.OriginalName = mod.Name;
+                mod.Name = parts[1];
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static string SanitizeQuery(string name)
+    {
+        var text = Regex.Replace(name, @"[\[\(（【][^\]\)）】]*[\]\)）】]", " ");
+        text = Regex.Replace(text, @"[^\w\s\-\.']", " ");
+        return Regex.Replace(text, @"\s+", " ").Trim();
+    }
+
+    private static bool IsNameMatch(ModItem mod, ModItem candidate)
+    {
+        var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var value in new[] { mod.Name, mod.OriginalName, mod.Slug })
+        {
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            targets.Add(NormalizeName(value));
+            targets.Add(BaseName(value));
+        }
+
+        foreach (var alias in GetMcmodAliases(candidate.Name).Concat(GetMcmodAliases(candidate.OriginalName)))
+        {
+            if (string.IsNullOrWhiteSpace(alias)) continue;
+            var normalized = NormalizeName(alias);
+            if (normalized.Length < 3) continue;
+            if (targets.Contains(normalized) || targets.Contains(BaseName(alias))) return true;
+        }
+        return false;
+    }
 
     private static async Task<List<ModItem>> SearchSafe(
         ModSource source, string keyword, string? version, string? loader, ResourceMode mode)
@@ -1072,12 +1238,12 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
         var nameBlock = new TextBlock
         {
-            Text = mod.Name,
             FontSize = 13, FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("TextBrush"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             Margin = new Thickness(0, 0, 0, 2)
         };
+        nameBlock.SetBinding(TextBlock.TextProperty, new Binding(nameof(ModItem.Name)) { Source = mod });
 
         var metaLine = new TextBlock
         {
@@ -1105,7 +1271,6 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
         var descBlock = new TextBlock
         {
-            Text = mod.Summary,
             FontSize = 11,
             Foreground = (Brush)FindResource("TextBrush"),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1113,10 +1278,22 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             MaxHeight = 32,
             TextWrapping = TextWrapping.NoWrap
         };
+        descBlock.SetBinding(TextBlock.TextProperty, new Binding(nameof(ModItem.Summary)) { Source = mod });
+
+        var supportBlock = new TextBlock
+        {
+            FontSize = 10,
+            Foreground = (Brush)FindResource("TextMutedBrush"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap,
+            Margin = new Thickness(0, 3, 0, 0)
+        };
+        supportBlock.SetBinding(TextBlock.TextProperty, new Binding(nameof(ModItem.SupportLabel)) { Source = mod });
 
         infoStack.Children.Add(nameBlock);
         infoStack.Children.Add(metaLine);
         infoStack.Children.Add(descBlock);
+        infoStack.Children.Add(supportBlock);
         Grid.SetColumn(infoStack, 2);
 
         grid.Children.Add(iconBorder);
@@ -1194,7 +1371,6 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
         var nameBlock = new TextBlock
         {
-            Text = mod.Name,
             FontSize = 10,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)FindResource("TextBrush"),
@@ -1202,8 +1378,11 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             TextWrapping = TextWrapping.NoWrap,
             Margin = new Thickness(2, 0, 2, 1)
         };
+        nameBlock.SetBinding(TextBlock.TextProperty, new Binding(nameof(ModItem.Name)) { Source = mod });
         Grid.SetRow(nameBlock, 1);
         panel.Children.Add(nameBlock);
+
+        card.SetBinding(ToolTipProperty, new Binding(nameof(ModItem.SupportLabel)) { Source = mod });
 
         var metaLine = new TextBlock
         {
@@ -1259,35 +1438,21 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             var cacheKey = $"{mod.Source}:{mod.Id}:{mod.Slug}";
             if (string.IsNullOrEmpty(url))
             {
-                if (!ResolvedIconCache.TryGetValue(cacheKey, out url))
+                url = ImageCacheService.GetResolvedUrl(cacheKey);
+                if (string.IsNullOrEmpty(url))
                 {
                     url = await ResolveIconUrl(mod);
-                    ResolvedIconCache[cacheKey] = url;
+                    ImageCacheService.StoreResolvedUrl(cacheKey, url);
                 }
                 mod.IconUrl = url;
             }
             if (string.IsNullOrEmpty(url)) return;
 
             if (url.StartsWith("//")) url = "https:" + url;
-            if (IconCache.TryGetValue(url, out var cached))
-            {
-                img.Source = cached;
-                img.Opacity = 1;
-                fallback.Visibility = Visibility.Collapsed;
-                return;
-            }
 
-            using var response = await IconHttp.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.StreamSource = new MemoryStream(bytes);
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.DecodePixelWidth = 88;
-            bmp.EndInit();
-            bmp.Freeze();
-            IconCache[url] = bmp;
+            var bmp = await ImageCacheService.GetAsync(IconHttp, url, 88);
+            if (bmp == null) return;
+
             img.Source = bmp;
             img.Opacity = 1;
             fallback.Visibility = Visibility.Collapsed;
@@ -1435,23 +1600,12 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
     {
         try
         {
-            if (DetailImageCache.TryGetValue(url, out var cached))
+            var bitmap = await ImageCacheService.GetAsync(IconHttp, url, 900);
+            if (bitmap == null)
             {
-                image.Source = cached;
-                image.Opacity = 1;
+                image.Visibility = Visibility.Collapsed;
                 return;
             }
-            using var response = await IconHttp.GetAsync(url);
-            response.EnsureSuccessStatusCode();
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.StreamSource = new MemoryStream(bytes);
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = 900;
-            bitmap.EndInit();
-            bitmap.Freeze();
-            DetailImageCache[url] = bitmap;
             image.Source = bitmap;
             image.Opacity = 1;
         }

@@ -30,10 +30,18 @@
                             <ColumnDefinition Width="6"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="6"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
                         <Button Grid.Column="0" Content="安装新版本" Style="{DynamicResource BtnPrimary}" Height="34" Padding="16,4"
                                 Click="InstallVersion_Click"/>
                         <Button Grid.Column="2" Content="添加已有文件夹" Style="{DynamicResource BtnBase}" Height="34" Padding="8,4"
                                 Click="AddExistingFolder_Click"/>
+                        <Button Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Content="复制选中版本（独立副本）"
+                                Style="{DynamicResource BtnBase}" Height="34" Padding="8,4"
+                                Click="DuplicateVersion_Click"/>
                     </Grid>
                     <Border Height="1" Background="{DynamicResource BorderBrush}" Margin="24,0,24,8"/>
                 </StackPanel>

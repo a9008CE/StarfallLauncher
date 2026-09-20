@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -258,6 +259,8 @@ public class MinecraftService
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             CreateNoWindow = true
         };
         foreach (var argument in args)
@@ -447,6 +450,9 @@ public class MinecraftService
             ApplyGcArguments(jvmArgs, javaMajor);
 
         jvmArgs.Add("-Dlog4j2.formatMsgNoLookups=true");
+        jvmArgs.Add("-Dfile.encoding=UTF-8");
+        jvmArgs.Add("-Dstdout.encoding=UTF-8");
+        jvmArgs.Add("-Dstderr.encoding=UTF-8");
 
         jvmArgs.AddRange(SplitLegacyArguments(instance.JvmArguments)
             .Where(argument => !IsMemoryArgument(argument) && IsJvmArgumentSupported(argument, javaMajor))

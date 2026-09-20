@@ -83,15 +83,16 @@ public class DownloadManager : INotifyPropertyChanged
         return client;
     }
 
-    public DownloadTask Enqueue(string name, List<DownloadItem> items, int workers = 0, string category = "general", Func<Task>? postDownloadAction = null, int maxAttempts = 0)
+    public DownloadTask Enqueue(string name, List<DownloadItem> items, int workers = 0, string category = "general", Func<Task>? postDownloadAction = null, int maxAttempts = 0, bool showWhenEmpty = false, bool force = false)
     {
         // 先按目标去重再并行校验，避免成千上万个文件顺序哈希导致卡顿
+        // force = true 时不校验本地文件，用于「重复下载」时强制重新拉取
         var pendingItems = items
             .GroupBy(item => item.Target, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
             .AsParallel()
             .AsOrdered()
-            .Where(item => !DownloadService.ValidFile(item))
+            .Where(item => force || !DownloadService.ValidFile(item))
             .ToList();
         var task = new DownloadTask
         {
@@ -108,6 +109,14 @@ public class DownloadManager : INotifyPropertyChanged
             task.Status = DownloadTaskStatus.Completed;
             task.Progress = 100;
             task.CompletedFiles = task.TotalFiles;
+
+            // 文件已完整：默认不占位，安装/补全流程要求时仍显示一条「已完成」，避免下载管理空白无从判断
+            if (showWhenEmpty)
+            {
+                task.StatusText = "文件已完整，无需下载";
+                Tasks.Insert(0, task);
+                QueueChanged?.Invoke(this, EventArgs.Empty);
+            }
             return task;
         }
 

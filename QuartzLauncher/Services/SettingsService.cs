@@ -33,6 +33,8 @@ public class SettingsService
                 data.PageAnimationStyle = "slide";
                 data.AdvancedAnimationEnabled = true;
             }
+            if (data.DownloadWorkers == 8)
+                data.DownloadWorkers = 64;
             ResolvePortablePaths(data);
             var service = new SettingsService(paths, data);
             service.Save();

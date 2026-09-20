@@ -145,7 +145,7 @@ public partial class VersionsPage : Page
                 ? "redstone"
                 : _filterType == "snapshot" || type == "snapshot" ? "command" : "grass";
 
-            var isDownloaded = localVersions.Contains(id);
+            var isDownloaded = IsVersionComplete(id);
 
             var panel = new DockPanel { Tag = id };
             var dateText = new TextBlock
@@ -397,7 +397,8 @@ public partial class VersionsPage : Page
                 $"导入 {name} 的 Minecraft {descriptor.MinecraftVersion}",
                 baseItems,
                 workers: App.Settings.Data.DownloadWorkers,
-                category: "version");
+                category: "version",
+                showWhenEmpty: true);
             ownerWindow?.NavigateToDownloadCenter(versionOnly: true);
             if (baseTask.Tcs != null) await baseTask.Tcs.Task;
             if (baseTask.Status != DownloadTaskStatus.Completed)
@@ -424,10 +425,11 @@ public partial class VersionsPage : Page
                 {
                     InstallStatusText.Text = $"正在下载整合包内容（{remoteFiles.Count} 个文件）...";
                     var contentTask = DownloadManager.Instance.Enqueue(
-                        $"整合包内容 · {name}",
-                        remoteFiles,
-                        workers: App.Settings.Data.DownloadWorkers,
-                        category: "resource");
+                    $"整合包内容 · {name}",
+                    remoteFiles,
+                    workers: App.Settings.Data.DownloadWorkers,
+                    category: "version",
+                    showWhenEmpty: true);
                     if (contentTask.Tcs != null) await contentTask.Tcs.Task;
                     if (contentTask.Status != DownloadTaskStatus.Completed)
                         throw new IOException($"整合包内容下载失败: {contentTask.Error}");
@@ -481,6 +483,99 @@ public partial class VersionsPage : Page
         }
     }
 
+    // 重复下载同一版本：新建一个独立的版本文件夹（Minecraft 不允许两个同名版本）
+    private string CreateDuplicateVersion(string sourceId)
+    {
+        var newId = sourceId + "-2";
+        for (var suffix = 3; Directory.Exists(Path.Combine(App.Paths.VersionsDir, newId)); suffix++)
+            newId = sourceId + "-" + suffix;
+
+        var newDir = Path.Combine(App.Paths.VersionsDir, newId);
+        Directory.CreateDirectory(newDir);
+
+        // 继承原版本：副本只存一个 JSON，客户端 JAR 与依赖库共用
+        var now = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ssZ");
+        var json = new Newtonsoft.Json.Linq.JObject
+        {
+            ["id"] = newId,
+            ["inheritsFrom"] = sourceId,
+            ["type"] = "release",
+            ["time"] = now,
+            ["releaseTime"] = now,
+            ["libraries"] = new Newtonsoft.Json.Linq.JArray()
+        };
+        File.WriteAllText(Path.Combine(newDir, newId + ".json"), json.ToString());
+
+        var baseVersion = System.Text.RegularExpressions.Regex.Match(sourceId, @"^(1\.\d+(\.\d+)?)");
+        var mcVersion = baseVersion.Success ? baseVersion.Groups[1].Value : sourceId;
+        var lower = sourceId.ToLowerInvariant();
+        var loader = lower.Contains("neoforge") ? "neoforge"
+            : lower.Contains("forge") ? "forge"
+            : lower.Contains("fabric") ? "fabric"
+            : lower.Contains("quilt") ? "quilt"
+            : lower.Contains("optifine") ? "optifine"
+            : "vanilla";
+
+        var instance = new Instance
+        {
+            Id = $"copy-{Guid.NewGuid().ToString("N")[..8]}",
+            Name = newId,
+            VersionId = newId,
+            McVersion = mcVersion,
+            Loader = loader,
+            VersionIsolation = true,
+            UsesVersionDirectory = true
+        };
+        new InstanceStore(App.Paths.InstancesDir).Create(instance);
+        return newId;
+    }
+
+    // 同一个版本可以建多份实例：共用版本文件，其余各自独立
+    private void CreateDuplicateInstance(string versionId)
+    {
+        var store = new InstanceStore(App.Paths.InstancesDir);
+        var existing = store.List();
+        var names = existing.Select(instance => instance.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var name = versionId;
+        for (var suffix = 2; names.Contains(name); suffix++)
+            name = $"{versionId}-{suffix}";
+
+        var id = new string(name.Select(c => char.IsLetterOrDigit(c) || c is '-' or '_' ? char.ToLowerInvariant(c) : '-').ToArray());
+        while (id.Contains("--")) id = id.Replace("--", "-");
+        id = id.Trim('-', '_');
+        if (string.IsNullOrWhiteSpace(id)) id = "instance";
+        if (id.Length > 64) id = id[..64].TrimEnd('-', '_');
+
+        var baseVersion = System.Text.RegularExpressions.Regex.Match(versionId, @"^(1\.\d+(\.\d+)?)");
+        var mcVersion = baseVersion.Success ? baseVersion.Groups[1].Value : versionId;
+
+        var lower = versionId.ToLowerInvariant();
+        var loader = lower.Contains("neoforge") ? "neoforge"
+            : lower.Contains("forge") ? "forge"
+            : lower.Contains("fabric") ? "fabric"
+            : lower.Contains("quilt") ? "quilt"
+            : lower.Contains("optifine") ? "optifine"
+            : "vanilla";
+
+        var instance = new Instance
+        {
+            Id = $"{id}-{Guid.NewGuid().ToString("N")[..6]}",
+            Name = name,
+            VersionId = versionId,
+            McVersion = mcVersion,
+            Loader = loader,
+            VersionIsolation = true,
+            UsesVersionDirectory = true
+        };
+        store.Create(instance);
+
+        InstallStatusText.Text = $"已新建实例「{name}」";
+        AnimatedMessageBox.Show(
+            $"已新建实例「{name}」。\n\n共用 {versionId} 的版本文件，mods 与存档各自独立。\n可在首页的版本下拉框中选到它。",
+            "新建实例", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_selectedVersion)) return;
@@ -489,10 +584,47 @@ public partial class VersionsPage : Page
         try
         {
             var items = await _mc.PrepareInstallAsync(_selectedVersion);
+
+            // 已经装过的版本：询问是再新建一份实例，还是只补全缺失/损坏的文件
+            var force = false;
+            if (IsVersionComplete(_selectedVersion))
+            {
+                var choice = AnimatedMessageBox.Show(
+                    $"「{_selectedVersion}」已经安装过了，想怎么处理？\n\n"
+                    + "新建独立版本：另建一个版本文件夹，拥有自己的 mods、存档与配置\n"
+                    + "补全文件：保留原版本，只修复缺失或损坏的文件",
+                    "该版本已存在", MessageBoxButton.YesNoCancel, MessageBoxImage.Question,
+                    (Yes: "新建独立版本", No: "补全文件", Cancel: "取消"));
+
+                if (choice == MessageBoxResult.Cancel)
+                {
+                    InstallBtn.IsEnabled = true;
+                    InstallStatusText.Text = "";
+                    return;
+                }
+                if (choice == MessageBoxResult.Yes)
+                {
+                    var duplicateId = CreateDuplicateVersion(_selectedVersion);
+                    InstallStatusText.Text = $"已新建独立版本：{duplicateId}";
+                    AnimatedMessageBox.Show(
+                        $"已新建独立版本「{duplicateId}」：\n\n"
+                        + "它有自己的版本文件夹、mods、存档与配置，与原版本互不影响。\n"
+                        + "客户端 JAR 与依赖库和原版本共用，不额外占用空间。",
+                        "已新建独立版本", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+            }
+            else if (File.Exists(Path.Combine(App.Paths.VersionsDir, _selectedVersion, _selectedVersion + ".json")))
+            {
+                InstallStatusText.Text = $"检测到 {_selectedVersion} 的安装未完成，将补全缺失文件";
+            }
+
             var task = DownloadManager.Instance.Enqueue(
                 $"Minecraft {_selectedVersion}", items,
                 workers: App.Settings.Data.DownloadWorkers,
-                category: "version");
+                category: "version",
+                showWhenEmpty: true,
+                force: force);
             InstallStatusText.Text = $"已加入下载队列 (共 {items.Count} 个文件)";
 
             if (Window.GetWindow(this) is MainWindow mw)
@@ -599,6 +731,24 @@ public partial class VersionsPage : Page
                || id.Contains("15w14") || id.Contains("3D Shareware", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool IsVersionComplete(string versionId)
+    {
+        var directory = Path.Combine(App.Paths.VersionsDir, versionId);
+        if (!File.Exists(Path.Combine(directory, versionId + ".json"))) return false;
+
+        string baseId;
+        try
+        {
+            baseId = _mc.BaseVersionId(versionId);
+        }
+        catch
+        {
+            baseId = versionId;
+        }
+        if (File.Exists(Path.Combine(App.Paths.VersionsDir, baseId, baseId + ".jar"))) return true;
+        return File.Exists(Path.Combine(directory, versionId + ".jar"));
+    }
+
     private static HashSet<string> GetLocalVersionIds()
     {
         if (!Directory.Exists(App.Paths.VersionsDir))
@@ -625,12 +775,13 @@ public partial class VersionsPage : Page
 
         foreach (var id in localVersions.Where(id => !known.Contains(id)))
         {
-            var jarPath = Path.Combine(App.Paths.VersionsDir, id, $"{id}.jar");
+            var directory = Path.Combine(App.Paths.VersionsDir, id);
+            var jarPath = Path.Combine(directory, $"{id}.jar");
             result.Add(new Dictionary<string, object>
             {
                 ["id"] = id,
                 ["type"] = "release",
-                ["releaseTime"] = File.GetLastWriteTime(jarPath).ToString("yyyy-MM-dd")
+                ["releaseTime"] = (File.Exists(jarPath) ? File.GetLastWriteTime(jarPath) : Directory.GetLastWriteTime(directory)).ToString("yyyy-MM-dd")
             });
         }
 

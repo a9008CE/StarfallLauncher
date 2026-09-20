@@ -13,7 +13,7 @@ public static class HttpClients
             AutomaticDecompression = DecompressionMethods.All,
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 8,
-            MaxConnectionsPerServer = 64,
+            MaxConnectionsPerServer = 256,
             SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
         })
         {

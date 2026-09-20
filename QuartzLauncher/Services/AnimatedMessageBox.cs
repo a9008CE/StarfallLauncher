@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -25,6 +25,23 @@ public static class AnimatedMessageBox
         var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
                     ?? Application.Current.MainWindow;
         var dialog = new AnimatedDialog(message, title, buttons, image)
+        {
+            Owner = owner
+        };
+        return dialog.ShowDialog() == true ? dialog.Result : dialog.Result;
+    }
+
+    /// <summary>可自定义按钮文字的消息框（顺序：是 / 否 / 取消）。</summary>
+    public static MessageBoxResult Show(
+        string message,
+        string title,
+        MessageBoxButton buttons,
+        MessageBoxImage image,
+        (string Yes, string No, string Cancel) labels)
+    {
+        var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive)
+                    ?? Application.Current.MainWindow;
+        var dialog = new AnimatedDialog(message, title, buttons, image, true, labels)
         {
             Owner = owner
         };
@@ -67,8 +84,12 @@ public static class AnimatedMessageBox
 
         public MessageBoxResult Result { get; private set; } = MessageBoxResult.None;
 
-        public AnimatedDialog(string message, string title, MessageBoxButton buttons, MessageBoxImage image, bool modal = true)
+        private readonly (string Yes, string No, string Cancel)? _labels;
+
+        public AnimatedDialog(string message, string title, MessageBoxButton buttons, MessageBoxImage image, bool modal = true,
+            (string Yes, string No, string Cancel)? labels = null)
         {
+            _labels = labels;
             _modal = modal;
             Title = title;
             Width = 420;
@@ -193,17 +214,17 @@ public static class AnimatedMessageBox
         {
             if (buttons is MessageBoxButton.YesNo or MessageBoxButton.YesNoCancel)
             {
-                var yes = CreateButton("确定", "BtnPrimary", 86);
+                var yes = CreateButton(_labels?.Yes ?? "确定", "BtnPrimary", double.NaN);
                 yes.Click += (_, _) => BeginClose(MessageBoxResult.Yes);
                 actions.Children.Add(yes);
 
-                var no = CreateButton("取消", "BtnBase", 86);
+                var no = CreateButton(_labels?.No ?? "取消", "BtnBase", double.NaN);
                 no.Click += (_, _) => BeginClose(MessageBoxResult.No);
                 actions.Children.Add(no);
 
                 if (buttons == MessageBoxButton.YesNoCancel)
                 {
-                    var cancel = CreateButton("关闭", "BtnBase", 86);
+                    var cancel = CreateButton(_labels?.Cancel ?? "关闭", "BtnBase", double.NaN);
                     cancel.Click += (_, _) => BeginClose(MessageBoxResult.Cancel);
                     actions.Children.Add(cancel);
                 }

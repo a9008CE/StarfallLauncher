@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using QuartzLauncher.Models;
 
@@ -386,6 +387,11 @@ public static class CurseForgeService
     {
         var authors = v["authors"]?.ToObject<List<JObject>>() ?? new();
         var links = v["links"] ?? new JObject();
+        var latestFiles = v["latestFiles"]?.ToObject<List<JObject>>() ?? new();
+        var versionTags = latestFiles
+            .SelectMany(f => f["gameVersions"]?.ToObject<List<string>>() ?? new())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         return new ModItem
         {
             Id = v["id"]?.ToString() ?? "",
@@ -398,8 +404,18 @@ public static class CurseForgeService
             PageUrl = links["websiteUrl"]?.ToString() ?? "",
             Authors = authors.Select(a => a["name"]?.ToString() ?? "").Where(n => !string.IsNullOrEmpty(n)).ToList(),
             Categories = v["categories"]?.ToObject<List<JObject>>()?.Select(c => c["name"]?.ToString() ?? "").Where(n => !string.IsNullOrEmpty(n)).ToList() ?? new(),
-            Versions = v["latestFiles"]?.ToObject<List<JObject>>()?.Select(f => f["gameVersion"]?.ToString() ?? "").Where(v => !string.IsNullOrEmpty(v)).Distinct().ToList() ?? new(),
+            Versions = versionTags.Where(IsMinecraftVersion).ToList(),
+            Loaders = versionTags.Where(IsLoaderName)
+                .Concat(latestFiles.SelectMany(f => GetFileLoaders(f["modLoader"]?.ToObject<int>() ?? 0, f["fileName"]?.ToString() ?? "")))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Source = ModSource.CurseForge
         };
     }
+
+    private static bool IsMinecraftVersion(string value) =>
+        !string.IsNullOrWhiteSpace(value) && Regex.IsMatch(value, @"^\d+(\.\d+)+$");
+
+    private static bool IsLoaderName(string value) => value.ToLowerInvariant() is
+        "forge" or "fabric" or "neoforge" or "quilt" or "liteloader" or "rift";
 }

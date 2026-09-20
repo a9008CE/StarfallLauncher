@@ -16,7 +16,7 @@ public class Settings
     public bool AutoSelectJava { get; set; } = true;
     public int MemoryMb { get; set; } = 4096;
     public string PlayerName { get; set; } = "Steve";
-    public int DownloadWorkers { get; set; } = 8;
+    public int DownloadWorkers { get; set; } = 64;
     public string AuthMode { get; set; } = AuthModes.Offline;
     public string AuthServer { get; set; } = "https://littleskin.cn/api/yggdrasil";
     public string AuthAccount { get; set; } = "";

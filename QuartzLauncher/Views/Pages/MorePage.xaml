@@ -66,6 +66,14 @@
                             <TextBlock Text="下载管理" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
+                    <RadioButton x:Name="NavMapDownload" Style="{DynamicResource NavBtn}" GroupName="MoreNav"
+                                 Click="NavMapDownload_Click">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                            <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                       Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="地图下载" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
                     <RadioButton x:Name="NavPreset6" Style="{DynamicResource NavBtn}" GroupName="MoreNav"
                                  Click="NavPreset6_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">

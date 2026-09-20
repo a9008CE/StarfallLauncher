@@ -25,8 +25,8 @@ public sealed class UpdateAnnouncement
 /// </summary>
 public static class UpdateService
 {
-    public const string CurrentVersion = "1.0.2";
-    public static string DisplayVersion => "星落 LaunCher 1.0.2";
+    public const string CurrentVersion = "1.0.3";
+    public static string DisplayVersion => "星落 LaunCher 1.0.3";
 
     public static UpdateAnnouncement LoadAnnouncement()
     {
@@ -47,7 +47,7 @@ public static class UpdateService
         return new UpdateAnnouncement
         {
             Version = CurrentVersion,
-            Notes = "开源版不包含自动更新机制，请手动获取新版本。"
+            Notes = "星落 LaunCher 1.0.3"
         };
     }
 
