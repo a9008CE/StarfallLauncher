@@ -25,8 +25,8 @@ public sealed class UpdateAnnouncement
 /// </summary>
 public static class UpdateService
 {
-    public const string CurrentVersion = "1.0.3";
-    public static string DisplayVersion => "星落 LaunCher 1.0.3";
+    public const string CurrentVersion = "1.0.4";
+    public static string DisplayVersion => "星落 LaunCher 1.0.4";
 
     public static UpdateAnnouncement LoadAnnouncement()
     {

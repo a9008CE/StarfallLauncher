@@ -72,6 +72,9 @@
                                             <Button Content="阅读更多 →" Style="{DynamicResource BtnPrimary}"
                                                     Height="32" FontSize="12" Padding="13,2"
                                                     Click="ReadMore_Click" Tag="{Binding}"/>
+                                            <Button Content="下载地图" Style="{DynamicResource BtnBase}"
+                                                    Height="32" FontSize="12" Padding="13,2" Margin="8,0,0,0"
+                                                    Click="CardDownload_Click" Tag="{Binding}"/>
                                         </StackPanel>
                                     </StackPanel>
 

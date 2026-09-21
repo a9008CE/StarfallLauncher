@@ -60,7 +60,15 @@
                             <TextBlock Text="材质包下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavJava" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavMap" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                             Click="NavMap_Click">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                        <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                   Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock Text="地图下载" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton x:Name="NavJava" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavJava_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE756;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -76,15 +84,7 @@
                             <TextBlock Text="下载管理" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavMap" Style="{DynamicResource NavBtn}" GroupName="ModNav"
-                             Click="NavMap_Click">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                        <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                   Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <TextBlock Text="地图下载" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </RadioButton>
-                <RadioButton x:Name="NavSettings" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavSettings" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavSettings_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15"

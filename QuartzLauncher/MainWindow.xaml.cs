@@ -92,8 +92,9 @@ public partial class MainWindow : Window
 
         _startupTargetWidth = Width;
         _startupTargetHeight = Height;
-        _startupInitialWidth = Math.Max(MinWidth, _startupTargetWidth * 0.9);
-        _startupInitialHeight = Math.Max(MinHeight, _startupTargetHeight * 0.9);
+        // 起点不要太小，避免「从小弹到大」的生硬感
+        _startupInitialWidth = Math.Max(MinWidth, _startupTargetWidth * 0.94);
+        _startupInitialHeight = Math.Max(MinHeight, _startupTargetHeight * 0.94);
         Width = _startupInitialWidth;
         Height = _startupInitialHeight;
 
@@ -241,6 +242,15 @@ public partial class MainWindow : Window
             {
             }
         }
+        // 自动清理版本文件已不存在的实例记录（只清记录，不动版本目录和游戏数据）
+        try
+        {
+            await Task.Run(CleanStaleInstances);
+        }
+        catch
+        {
+        }
+
         // 启动时总是检查更新，不再依赖「自动获取更新」开关
         await Task.Delay(800);
         try
@@ -263,6 +273,39 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// 清理「版本文件已经不在了」的实例记录：只删 instances 里的元数据，
+    /// 绝不删除版本目录和游戏数据（mods / 存档）。正在安装/导入的（元数据很新）跳过。
+    /// </summary>
+    private static void CleanStaleInstances()
+    {
+        var store = new InstanceStore(App.Paths.InstancesDir);
+        foreach (var instance in store.List())
+        {
+            var versionId = string.IsNullOrWhiteSpace(instance.VersionId) ? instance.McVersion : instance.VersionId;
+            if (string.IsNullOrWhiteSpace(versionId)) continue;
+
+            var versionDir = Path.Combine(App.Paths.VersionsDir, versionId);
+            var hasVersionFiles = Directory.Exists(versionDir)
+                                  && (File.Exists(Path.Combine(versionDir, versionId + ".json"))
+                                      || File.Exists(Path.Combine(versionDir, versionId + ".jar")));
+            if (hasVersionFiles) continue;
+
+            // 元数据刚写入不久，可能是正在安装 / 导入，先不动
+            var metadata = Path.Combine(App.Paths.InstancesDir, instance.Id, "instance.json");
+            if (File.Exists(metadata) && DateTime.Now - File.GetLastWriteTime(metadata) < TimeSpan.FromMinutes(30)) continue;
+
+            try
+            {
+                store.Delete(instance.Id);
+            }
+            catch
+            {
+                // 清理失败不影响启动
+            }
+        }
+    }
+
     private void MainWindow_ContentRendered(object? sender, EventArgs e)
     {
         ContentRendered -= MainWindow_ContentRendered;
@@ -278,23 +321,27 @@ public partial class MainWindow : Window
         var startTop = Top;
         var targetLeft = startLeft - (_startupTargetWidth - _startupInitialWidth) / 2;
         var targetTop = startTop - (_startupTargetHeight - _startupInitialHeight) / 2;
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var width = new DoubleAnimation(_startupInitialWidth, _startupTargetWidth, TimeSpan.FromMilliseconds(680))
+        // 窗口展开用更柔和的曲线（先快后慢、落地轻），配合内容淡入
+        var ease = new QuarticEase { EasingMode = EasingMode.EaseOut };
+        var windowDuration = TimeSpan.FromMilliseconds(760);
+        var width = new DoubleAnimation(_startupInitialWidth, _startupTargetWidth, windowDuration)
         {
             EasingFunction = ease
         };
-        var height = new DoubleAnimation(_startupInitialHeight, _startupTargetHeight, TimeSpan.FromMilliseconds(680))
+        var height = new DoubleAnimation(_startupInitialHeight, _startupTargetHeight, windowDuration)
         {
             EasingFunction = ease
         };
-        var left = new DoubleAnimation(startLeft, targetLeft, TimeSpan.FromMilliseconds(680))
+        var left = new DoubleAnimation(startLeft, targetLeft, windowDuration)
         {
             EasingFunction = ease
         };
-        var top = new DoubleAnimation(startTop, targetTop, TimeSpan.FromMilliseconds(680))
+        var top = new DoubleAnimation(startTop, targetTop, windowDuration)
         {
             EasingFunction = ease
         };
+
+
 
         width.Completed += (_, _) =>
         {

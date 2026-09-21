@@ -173,7 +173,7 @@ public static class MapCraftService
     /// <summary>抓取详情页，补全下载直链与文件大小。</summary>
     public static async Task<bool> FillDownloadAsync(MapCraftItem item, CancellationToken ct = default)
     {
-        if (!string.IsNullOrWhiteSpace(item.DownloadUrl)) return true;
+        if (!string.IsNullOrWhiteSpace(item.DownloadUrl) && !string.IsNullOrWhiteSpace(item.SizeText)) return true;
         if (string.IsNullOrWhiteSpace(item.DetailUrl)) return false;
 
         try
@@ -292,6 +292,26 @@ public static class MapCraftService
 
         item.Description = block.Length > 1600 ? block[..1600].TrimEnd() + " …" : block;
         return true;
+    }
+
+    /// <summary>把「23 mb」「621 kb」这类文字转成字节数（分片下载需要知道文件大小）。</summary>
+    public static long ParseSizeBytes(string sizeText)
+    {
+        if (string.IsNullOrWhiteSpace(sizeText)) return 0;
+
+        var match = Regex.Match(sizeText, @"([0-9]+(?:\.[0-9]+)?)\s*(gb|mb|kb|b)?", RegexOptions.IgnoreCase);
+        if (!match.Success) return 0;
+
+        var value = double.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+        var unit = match.Groups[2].Value.ToLowerInvariant();
+        var multiplier = unit switch
+        {
+            "gb" => 1024L * 1024 * 1024,
+            "mb" => 1024L * 1024,
+            "kb" => 1024L,
+            _ => 1L
+        };
+        return (long)(value * multiplier);
     }
 
     /// <summary>按照直链猜一个安全的存档文件夹名。</summary>

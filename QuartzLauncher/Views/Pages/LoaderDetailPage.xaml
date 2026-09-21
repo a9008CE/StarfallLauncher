@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.LoaderDetailPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.LoaderDetailPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Background="Transparent">
@@ -50,7 +50,7 @@
                     <TextBlock x:Name="StatusText" FontSize="12"
                                Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12"/>
                     <Button x:Name="ConfirmBtn" Content="确认选择" Style="{DynamicResource BtnPrimary}"
-                            Height="40" Click="Confirm_Click"/>
+                            Height="40" Padding="20,0" Click="Confirm_Click"/>
                 </StackPanel>
             </Border>
         </StackPanel>

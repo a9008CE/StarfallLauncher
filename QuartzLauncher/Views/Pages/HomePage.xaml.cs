@@ -142,7 +142,9 @@ public partial class HomePage : Page
 
         InstanceSelector.Items.Clear();
         var store = new InstanceStore(App.Paths.InstancesDir);
-        var instances = store.List();
+
+        // 版本文件已被删除的实例不再出现在首页，避免「删了还看得见」
+        var instances = store.List().Where(VersionFilesExist).ToList();
         foreach (var instance in instances)
             InstanceSelector.Items.Add(CreateInstanceComboItem(instance));
 
@@ -189,6 +191,14 @@ public partial class HomePage : Page
     {
         LaunchBtn.IsEnabled = InstanceSelector.SelectedItem is ComboBoxItem;
         UpdateInstanceInfo();
+    }
+
+    /// <summary>版本 JSON 还在（含导入的联接目录）才算有效实例，否则视为已删除。</summary>
+    private static bool VersionFilesExist(Instance instance)
+    {
+        var versionId = string.IsNullOrWhiteSpace(instance.VersionId) ? instance.McVersion : instance.VersionId;
+        if (string.IsNullOrWhiteSpace(versionId)) return false;
+        return File.Exists(Path.Combine(App.Paths.VersionsDir, versionId, versionId + ".json"));
     }
 
     private static ComboBoxItem CreateInstanceComboItem(Instance instance)

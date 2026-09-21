@@ -17,6 +17,7 @@ public static class InstanceDeletionService
             var localVersionRoot = Path.GetFullPath(Path.Combine(paths.VersionsDir, versionId));
             EnsureDirectChild(paths.VersionsDir, localVersionRoot);
             DeleteDirectory(localVersionRoot);
+            EnsureDeleted(localVersionRoot);
             return;
         }
 
@@ -42,7 +43,11 @@ public static class InstanceDeletionService
             && remainingInstances.Any(other =>
                 string.Equals(other.VersionId, versionId, StringComparison.OrdinalIgnoreCase)
                 || PathsEqual(InstancePathService.GetGameDirectory(paths, settings, other), versionRoot));
-        if (!versionStillReferenced && !string.IsNullOrWhiteSpace(versionRoot)) DeleteDirectory(versionRoot);
+        if (!versionStillReferenced && !string.IsNullOrWhiteSpace(versionRoot))
+        {
+            DeleteDirectory(versionRoot);
+            EnsureDeleted(versionRoot);
+        }
     }
 
     private static void DeleteDirectory(string path)
@@ -51,34 +56,79 @@ public static class InstanceDeletionService
 
         // 「添加已有文件夹」导入的版本以目录联接方式接入，
         // 删除时只能删掉链接本身，绝不能删到外部原文件夹里的游戏文件
-        if (new DirectoryInfo(path).Attributes.HasFlag(FileAttributes.ReparsePoint))
+        if (IsLink(path))
+        {
+            RemoveLink(path);
+            return;
+        }
+
+        // 逐个文件删除：跳过联接、清掉只读属性，比一次性递归删除更容错（递归遇到联接会失败）
+        foreach (var directory in Directory.EnumerateDirectories(path))
+        {
+            if (IsLink(directory))
+            {
+                RemoveLink(directory);
+                continue;
+            }
+            DeleteDirectory(directory);
+        }
+
+        foreach (var file in Directory.EnumerateFiles(path))
         {
             try
             {
-                Directory.Delete(path);
-                return;
+                File.SetAttributes(file, FileAttributes.Normal);
             }
             catch
             {
-                try
-                {
-                    using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
-                        "cmd.exe", $"/c rmdir \"{path}\"")
-                    {
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    });
-                    process?.WaitForExit(5000);
-                }
-                catch
-                {
-                    // 删除链接失败时保留目录，避免误删外部文件
-                }
-                return;
+                // 设置属性失败不影响后续删除
             }
+            File.Delete(file);
         }
 
-        Directory.Delete(path, true);
+        Directory.Delete(path, false);
+    }
+
+    private static bool IsLink(string path) =>
+        new DirectoryInfo(path).Attributes.HasFlag(FileAttributes.ReparsePoint);
+
+    private static void RemoveLink(string path)
+    {
+        try
+        {
+            Directory.Delete(path);
+            return;
+        }
+        catch
+        {
+            // 退回用 rmdir 只删除链接本身
+        }
+
+        try
+        {
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "cmd.exe", $"/c rmdir \"{path}\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+            process?.WaitForExit(5000);
+        }
+        catch
+        {
+            // 删除链接失败时保留目录，避免误删外部文件
+        }
+    }
+
+    /// <summary>删除后校验：目录还在就明确报错，避免「点了删除但文件还在」。</summary>
+    private static void EnsureDeleted(params string[] directories)
+    {
+        foreach (var directory in directories)
+        {
+            if (string.IsNullOrWhiteSpace(directory)) continue;
+            if (Directory.Exists(directory))
+                throw new IOException($"版本目录仍然存在（可能被游戏或资源管理器占用）：{directory}");
+        }
     }
 
     private static void EnsureDirectChild(string parent, string child)

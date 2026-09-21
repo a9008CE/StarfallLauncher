@@ -222,21 +222,36 @@ public partial class MapDownloadPage : Page, System.ComponentModel.INotifyProper
         }
     }
 
+    private async void CardDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: MapCraftItem item })
+            await StartDownloadAsync(item);
+    }
+
     private async void DetailDownload_Click(object sender, RoutedEventArgs e)
     {
         if (_detail is not { } item) return;
+        await StartDownloadAsync(item);
+    }
 
-        if (string.IsNullOrWhiteSpace(item.DownloadUrl))
+    private async Task StartDownloadAsync(MapCraftItem item)
+    {
+
+        if (string.IsNullOrWhiteSpace(item.DownloadUrl) || string.IsNullOrWhiteSpace(item.SizeText))
         {
-            StatusText.Text = "正在获取下载地址…";
-            if (!await MapCraftService.FillDownloadAsync(item))
-            {
-                AnimatedMessageBox.Show(
-                    "这个地图页面上没找到直接下载链接，可能是外链或已删除。\n\n可以点「在浏览器打开」手动下载。",
-                    "地图下载", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+            StatusText.Text = "正在获取下载信息…";
+            var filled = await MapCraftService.FillDownloadAsync(item);
             StatusText.Text = "";
+            if (string.IsNullOrWhiteSpace(item.DownloadUrl))
+            {
+                if (!filled)
+                {
+                    AnimatedMessageBox.Show(
+                        "这个地图页面上没找到直接下载链接，可能是外链或已删除。\n\n可以点「在浏览器打开」手动下载。",
+                        "地图下载", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+            }
         }
 
         var dialog = new Microsoft.Win32.SaveFileDialog
@@ -250,10 +265,12 @@ public partial class MapDownloadPage : Page, System.ComponentModel.INotifyProper
 
         try
         {
+            // 带上文件大小，下载器才能对 ≥4MB 的包做多线程分片下载；线程数跟随设置
+            var size = MapCraftService.ParseSizeBytes(item.SizeText);
             DownloadManager.Instance.Enqueue(
                 item.Title,
-                [new DownloadItem(item.DownloadUrl, dialog.FileName)],
-                workers: 1,
+                [new DownloadItem(item.DownloadUrl, dialog.FileName, "", size)],
+                workers: Math.Clamp(App.Settings.Data.DownloadWorkers, 1, 16),
                 category: "resource");
 
             if (Window.GetWindow(this) is MainWindow mainWindow)

@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.VersionsPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.VersionsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:local="clr-namespace:QuartzLauncher.Services"
@@ -111,7 +111,7 @@
                         <TextBlock x:Name="VersionTypeText" FontSize="12"
                                    Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,14"/>
                         <Button x:Name="InstallBtn" Content="安装此版本" Style="{DynamicResource BtnPrimary}"
-                                Height="40" IsEnabled="False" Click="Install_Click"/>
+                                Height="40" Padding="20,0" IsEnabled="False" Click="Install_Click"/>
                         <TextBlock x:Name="InstallStatusText" FontSize="12"
                                    Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,12,0,0"/>
                     </StackPanel>

@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.SettingsPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:behavior="clr-namespace:QuartzLauncher.Services"
@@ -179,7 +179,7 @@
                 </StackPanel>
             </Border>
 
-            <Button Content="保存设置" Style="{DynamicResource BtnPrimary}" Height="42" FontSize="14"
+            <Button Content="保存设置" Style="{DynamicResource BtnPrimary}" Height="42" Padding="20,0" FontSize="14"
                     Click="Save_Click" Margin="0,4,0,0"/>
         </StackPanel>
     </ScrollViewer>
