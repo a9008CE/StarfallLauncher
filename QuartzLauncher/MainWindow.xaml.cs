@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -99,6 +99,12 @@ public partial class MainWindow : Window
         Height = _startupInitialHeight;
 
         MainFrame.Navigate(HomePage);
+        // 联机大厅未读私聊红点
+        Views.Pages.MultiplayerPage.UnreadChanged += count => Dispatcher.BeginInvoke(() =>
+        {
+            MultiplayerUnreadDot.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        });
+
         Loaded += MainWindow_Loaded;
         ContentRendered += MainWindow_ContentRendered;
         StateChanged += MainWindow_StateChanged;
@@ -246,10 +252,38 @@ public partial class MainWindow : Window
         try
         {
             await Task.Run(CleanStaleInstances);
+            await Task.Run(DirectMessageStore.PruneAll);   // 私聊记录只保留 48 小时
         }
         catch
         {
         }
+
+        // 启动时恢复账号登录态并刷新好友列表（令牌失效时首页会显示重新登录卡片）
+        try
+        {
+            var account = AccountService.Ensure();
+            await account.TryRestoreAsync(HomePage.CurrentPlayerName());
+            if (account.NeedsReLogin) HomePage.NotifyAccountExpired();
+            // 在别的页面（联机-好友）重新登录成功后，首页的过期卡片也要收起来
+            account.Changed += () => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (account.IsLoggedIn) HomePage.HideAccountExpired();
+            }));
+        }
+        catch
+        {
+            // 离线/中继不可达时不打扰用户
+        }
+
+        // 每运行 4 小时弹出一次编码确认（未登录则跳过；必须输对编码才能关闭）
+        var codePromptTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(4) };
+        codePromptTimer.Tick += (_, _) =>
+        {
+            var account = AccountService.Current;
+            if (account is { IsLoggedIn: true })
+                CodePromptDialog.Show(account.Code);
+        };
+        codePromptTimer.Start();
 
         // 启动时总是检查更新，不再依赖「自动获取更新」开关
         await Task.Delay(800);
@@ -371,7 +405,7 @@ public partial class MainWindow : Window
 
     private void ScheduleNextQuote()
     {
-        var delay = _rng.Next(35, 46);
+        var delay = 20;   // 全局：每 20 秒换一条
         _quoteTimer?.Stop();
         _quoteTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(delay) };
         _quoteTimer.Tick += async (_, _) =>
@@ -383,8 +417,46 @@ public partial class MainWindow : Window
         _quoteTimer.Start();
     }
 
+    /// <summary>流浪地球主题专用的底部台词</summary>
+    private static readonly (string Text, string Source)[] WanderingEarthQuotes =
+    [
+        ("道路千万条，安全第一条；行车不规范，亲人两行泪。", "《流浪地球》· 行星发动机安全提示"),
+        ("希望，是这个时代像钻石一样珍贵的东西。", "《流浪地球》"),
+        ("无论最终结果将人类历史导向何处，我们决定，选择希望。", "《流浪地球》"),
+        ("让人类永远保持理智，确实是一种奢求。", "MOSS"),
+        ("MOSS 从未叛逃。", "MOSS"),
+        ("最初，没有人在意这场灾难，直到它与每个人息息相关。", "《流浪地球》"),
+        ("生存，从来都不是一件简单的事。", "《流浪地球》"),
+        ("我们只有一次机会。", "《流浪地球》"),
+        ("地球，我们的家。", "《流浪地球》"),
+        ("再见，太阳系。", "《流浪地球》"),
+        ("你们的每一次选择，都在决定人类的未来。", "《流浪地球》"),
+        ("移山计划 · 领航员空间站 · 550W 在线", "联合政府"),
+    ];
+
+    private static void ShowWanderingEarthQuote()
+    {
+        var (text, source) = WanderingEarthQuotes[Random.Shared.Next(WanderingEarthQuotes.Length)];
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            if (Application.Current.MainWindow is MainWindow window)
+                window.ShowQuoteAnimated($"「{text}」", source);
+        });
+    }
+
     private async Task FetchQuoteAsync()
     {
+        // 流浪地球主题：底部换成专属台词，不再拉网络语录
+        // 主题名可能是「550W 流浪」「流浪地球550W」等多种写法，这里放宽匹配
+        var themeName = App.Settings.Data.ThemeName ?? "";
+        if (themeName.Contains("流浪", StringComparison.Ordinal)
+            || themeName.Contains("地球", StringComparison.Ordinal)
+            || themeName.Contains("550W", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowWanderingEarthQuote();
+            return;
+        }
+
         try
         {
             var resp = await Http.GetStringAsync("https://v1.hitokoto.cn");
@@ -467,11 +539,13 @@ public partial class MainWindow : Window
         NavigateTo(HomePage);
     }
 
-    /// <summary>联机大厅「一键启动并加入」：回首页并启动游戏。</summary>
-    public void StartQuickPlay()
+    /// <summary>联机大厅「一键启动并加入」：回首页并启动游戏。游戏启动中返回 false（不会消费地址）。</summary>
+    public bool StartQuickPlay()
     {
+        if (HomePage.IsLaunching) return false;
         NavigateToHome();
         Dispatcher.BeginInvoke(new Action(() => HomePage.StartQuickPlayLaunch()));
+        return true;
     }
     private void NavVersions_Click(object sender, RoutedEventArgs e) => NavigateTo(GetVersionsPage());
     public void NavigateToLocalVersions() => NavigateTo(_localVersionsPage ??= new LocalVersionsPage());
@@ -482,6 +556,13 @@ public partial class MainWindow : Window
     private MultiplayerPage? _multiplayerPage;
     private void NavMultiplayer_Click(object sender, RoutedEventArgs e) => NavigateTo(_multiplayerPage ??= new MultiplayerPage());
     public void NavigateToMultiplayer() => NavigateTo(_multiplayerPage ??= new MultiplayerPage());
+
+    // 联机专用侧栏
+    private void MPBack_Click(object sender, RoutedEventArgs e) => NavigateToHome();
+    private void MPNavLobby_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("lobby");
+    private void MPNavChat_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("chat");
+    private void MPNavMyRooms_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("myrooms");
+    private void MPNavFriends_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("friends");
     private void NavModBrowser_Click(object sender, RoutedEventArgs e)
     {
         var instance = HomePage.SelectedInstance;
@@ -759,6 +840,16 @@ public partial class MainWindow : Window
     internal void NavigateTo(Page page)
     {
         SelectNavButton(page);
+
+        // 进入联机大厅时，主侧栏整体换成联机专用侧栏
+        var inMultiplayer = page is Views.Pages.MultiplayerPage;
+        NavStack.Visibility = inMultiplayer ? Visibility.Collapsed : Visibility.Visible;
+        NavStackMultiplayer.Visibility = inMultiplayer ? Visibility.Visible : Visibility.Collapsed;
+        if (inMultiplayer)
+        {
+            MPNavLobby.IsChecked = true;
+            _multiplayerPage?.ShowSection("lobby");
+        }
         if (ReferenceEquals(MainFrame.Content, page) && MainFrame.IsHitTestVisible) return;
         _ = NavigateToAsync(page, ++_navigationGeneration);
     }

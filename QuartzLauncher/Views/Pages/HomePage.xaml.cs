@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -51,6 +51,7 @@ public partial class HomePage : Page
         SetLogPanelExpanded(false, animate: false);
         RefreshProfile();
         RefreshInstances();
+        if (IsWanderingEarth) LaunchBtn.Content = "启动发动机";
         if (!_launchInProgress && _gameProcess is not { HasExited: false })
             SetLaunchState(LaunchUiState.Idle);
     }
@@ -80,6 +81,87 @@ public partial class HomePage : Page
         return string.Join(Environment.NewLine, lines);
     }
 
+    /// <summary>当前玩家名（离线用玩家名，正版/外置用账号名）。</summary>
+    public static string CurrentPlayerName()
+    {
+        var settings = App.Settings.Data;
+        var name = settings.AuthMode == AuthModes.Offline ? settings.PlayerName : settings.AuthPlayerName;
+        return string.IsNullOrWhiteSpace(name) ? "玩家" : name.Trim();
+    }
+
+    /// <summary>主窗口启动时发现登录令牌失效 → 首页显示重新登录卡片。</summary>
+    public void NotifyAccountExpired() => AccountExpiredCard.Visibility = Visibility.Visible;
+
+    /// <summary>在别的页面重新登录成功 → 收起重新登录卡片。</summary>
+    public void HideAccountExpired() => AccountExpiredCard.Visibility = Visibility.Collapsed;
+
+    private void ReLoginFromHome_Click(object sender, RoutedEventArgs e)
+    {
+        var account = AccountService.Current;
+        if (account == null || string.IsNullOrEmpty(account.Code)) return;
+
+        var password = AccountDialogs.ShowReLogin(Window.GetWindow(this), account.Code);
+        if (password == null) return;
+
+        _ = ReloginAsync(account, password);
+    }
+
+    private async Task ReloginAsync(AccountService account, string password)
+    {
+        try
+        {
+            var error = await account.LoginAsync(account.Code, password, CurrentPlayerName());
+            if (error == null)
+            {
+                AccountExpiredCard.Visibility = Visibility.Collapsed;
+                RefreshProfile();
+            }
+            else
+            {
+                // 输错密码等失败原因要显示出来，否则用户以为按钮失灵
+                AnimatedMessageBox.Show(error, "重新登录", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch
+        {
+            // 登录失败时保留卡片，用户可再试
+        }
+    }
+
+    /// <summary>皮肤脸部头像（正版走官方、第三方走 Yggdrasil、离线用本地皮肤或默认 Steve/Alex）。</summary>
+    private async Task ApplyAvatarAsync()
+    {
+        try
+        {
+            // 用户手动选的本地头像图优先（点头像导入的图片）
+            var settings = App.Settings.Data;
+            if (!string.IsNullOrWhiteSpace(settings.AuthAvatarPath)
+                && System.IO.File.Exists(settings.AuthAvatarPath))
+            {
+                var custom = new BitmapImage();
+                custom.BeginInit();
+                custom.UriSource = new Uri(settings.AuthAvatarPath);
+                custom.DecodePixelWidth = 64;
+                custom.EndInit();
+                custom.Freeze();
+                AvatarBorder.Background = new ImageBrush(custom) { Stretch = Stretch.UniformToFill };
+                AvatarText.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var avatar = await AvatarService.GetAvatarBitmapAsync();
+            if (avatar == null) return;
+            var brush = new ImageBrush(avatar) { Stretch = Stretch.UniformToFill };
+            RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+            AvatarBorder.Background = brush;
+            AvatarText.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            // 取不到时保留字母头像
+        }
+    }
+
     private void RefreshProfile()
     {
         var settings = App.Settings.Data;
@@ -89,24 +171,8 @@ public partial class HomePage : Page
 
         AvatarBorder.Background = (Brush)FindResource("PrimaryBrush");
         AvatarText.Visibility = Visibility.Visible;
-        if (!string.IsNullOrWhiteSpace(settings.AuthAvatarPath) && File.Exists(settings.AuthAvatarPath))
-        {
-            try
-            {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(settings.AuthAvatarPath);
-                bitmap.DecodePixelWidth = 64;
-                bitmap.EndInit();
-                bitmap.Freeze();
-                AvatarBorder.Background = new ImageBrush(bitmap) { Stretch = Stretch.UniformToFill };
-                AvatarText.Visibility = Visibility.Collapsed;
-            }
-            catch
-            {
-                // Keep the initial avatar when the custom image cannot be loaded.
-            }
-        }
+        // 头像可能联网获取（正版官方皮肤 / 第三方 Yggdrasil），异步补上
+        _ = ApplyAvatarAsync();
 
         if (settings.AuthMode == AuthModes.Microsoft && !string.IsNullOrWhiteSpace(settings.AuthPlayerName))
         {
@@ -249,6 +315,26 @@ public partial class HomePage : Page
 
     private enum LaunchUiState { Idle, Launching, Running, Crashed }
 
+    /// <summary>流浪地球主题（文案与配色换成发动机语境）</summary>
+    private static bool IsWanderingEarth
+    {
+        get
+        {
+            var name = App.Settings.Data.ThemeName ?? "";
+            return name.Contains("流浪", StringComparison.Ordinal)
+                   || name.Contains("550W", StringComparison.OrdinalIgnoreCase)
+                   || name.Contains("地球", StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>发动机火焰橙</summary>
+    private static Brush EngineBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(0xFF, 0x7A, 0x18));
+        brush.Freeze();
+        return brush;
+    }
+
     private void SetLaunchState(LaunchUiState state)
     {
         var primary = TryFindResource("PrimaryBrush") as Brush ?? Brushes.DodgerBlue;
@@ -256,36 +342,46 @@ public partial class HomePage : Page
         var success = TryFindResource("SuccessBrush") as Brush ?? primary;
         var text = TryFindResource("TextBrush") as Brush ?? Brushes.White;
 
+        var engine = IsWanderingEarth;
+        var engineBrush = engine ? EngineBrush() : primary;
+        if (engine) primary = engineBrush;
+
         switch (state)
         {
             case LaunchUiState.Running:
-                LaunchStatusText.Text = "游戏已启动";
-                LaunchStatusText.Foreground = success;
-                LaunchStatusPercent.Text = "100%";
-                LaunchStatusDetail.Text = "游戏进程正在运行，祝您游玩愉快！";
-                LaunchProgressBar.Foreground = primary;
+                LaunchStatusText.Text = engine ? "发动机运转正常" : "游戏已启动";
+                LaunchStatusText.Foreground = engine ? engineBrush : success;
+                LaunchStatusPercent.Text = engine ? "推力 07.2°" : "100%";
+                LaunchStatusDetail.Text = engine
+                    ? "北京第三区交通委 · 行星发动机监控中心 // 地球，我们的家"
+                    : "游戏进程正在运行，祝您游玩愉快！";
+                LaunchProgressBar.Foreground = engineBrush;
                 LaunchProgressBar.Value = 100;
                 break;
             case LaunchUiState.Crashed:
-                LaunchStatusText.Text = "游戏异常";
-                LaunchStatusText.Foreground = danger;
+                LaunchStatusText.Text = engine ? "严重警告 · 发动机异常" : "游戏异常";
+                LaunchStatusText.Foreground = engine ? danger : danger;
                 LaunchStatusPercent.Text = "";
-                LaunchStatusDetail.Text = "游戏进程异常退出，可展开日志或点击「分析日志」排查原因。";
+                LaunchStatusDetail.Text = engine
+                    ? "MOSS 检测到异常退出，请展开日志或点击「分析日志」排查原因。"
+                    : "游戏进程异常退出，可展开日志或点击「分析日志」排查原因。";
                 LaunchProgressBar.Foreground = danger;
                 LaunchProgressBar.Value = 100;
                 break;
             case LaunchUiState.Launching:
-                LaunchStatusText.Text = "正在启动游戏";
-                LaunchStatusText.Foreground = text;
-                LaunchStatusDetail.Text = "正在准备游戏文件，请稍候...";
-                LaunchProgressBar.Foreground = primary;
+                LaunchStatusText.Text = engine ? "发动机点火中…" : "正在启动游戏";
+                LaunchStatusText.Foreground = engine ? engineBrush : text;
+                LaunchStatusDetail.Text = engine ? "正在准备点火参数，请稍候…" : "正在准备游戏文件，请稍候...";
+                LaunchProgressBar.Foreground = engineBrush;
                 break;
             default:
-                LaunchStatusText.Text = "请启动游戏";
-                LaunchStatusText.Foreground = text;
+                LaunchStatusText.Text = engine ? "550W 待命" : "请启动游戏";
+                LaunchStatusText.Foreground = engine ? engineBrush : text;
                 LaunchStatusPercent.Text = "";
-                LaunchStatusDetail.Text = "选择版本后点击「启动游戏」";
-                LaunchProgressBar.Foreground = primary;
+                LaunchStatusDetail.Text = engine
+                    ? "等待点火指令 // 道路千万条，安全第一条"
+                    : "选择版本后点击「启动游戏」";
+                LaunchProgressBar.Foreground = engineBrush;
                 LaunchProgressBar.Value = 0;
                 break;
         }
@@ -312,6 +408,9 @@ public partial class HomePage : Page
     {
         if (InstanceSelector.SelectedItem is not ComboBoxItem item || item.Tag is not Instance instance)
             return;
+
+        // 一键加入地址在这里就消费掉：后面任何一步失败都不会把地址残留到下一次普通启动
+        var quickPlay = QuickPlayRequest.Consume();
 
         SetLogPanelExpanded(true);
         LaunchBtn.Visibility = Visibility.Collapsed;
@@ -445,7 +544,6 @@ public partial class HomePage : Page
             }
 
             SetStep("构建启动命令", 0.6);
-            var quickPlay = QuickPlayRequest.Consume();
             AppendLog(quickPlay != null
                 ? $"[INFO] 一键加入模式：使用当前账号会话连接 {quickPlay}"
                 : App.Settings.Data.LanAllowNonPremium && App.Settings.Data.AuthMode != AuthModes.Offline
@@ -504,6 +602,9 @@ public partial class HomePage : Page
             AnimatedMessageBox.Show(ex.Message, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
+
+    /// <summary>游戏是否正在启动（联机「加入房间」用它避免一键加入地址残留）。</summary>
+    public bool IsLaunching => _launchInProgress;
 
     /// <summary>联机大厅「一键启动并加入」：回到首页后直接启动游戏。</summary>
     public void StartQuickPlayLaunch()

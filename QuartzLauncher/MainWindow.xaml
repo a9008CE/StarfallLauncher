@@ -1,4 +1,4 @@
-<Window x:Class="QuartzLauncher.MainWindow"
+﻿<Window x:Class="QuartzLauncher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="clr-namespace:QuartzLauncher.Services"
@@ -101,20 +101,67 @@
                                            Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0"/>
                             </StackPanel>
 
-                            <StackPanel Visibility="{DynamicResource WanderingEarthVisibility}"
-                                        Margin="24,0,24,14">
-                                <TextBlock Text="550W ENGINE ARRAY" FontSize="11" FontWeight="Bold"
+                            <!-- 单行版：给首页腾出高度，避免把启动进度条挤下去 -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{DynamicResource WanderingEarthVisibility}"
+                                        Margin="24,0,24,6">
+                                <TextBlock Text="550W ENGINE ARRAY" FontSize="10" FontWeight="Bold"
                                            FontFamily="{DynamicResource UiDisplayFontFamily}"
                                            Foreground="{DynamicResource PrimaryBrush}"/>
-                                <TextBlock Text="MOUNTAIN MOVING PLAN // NOMINAL" FontSize="9"
+                                <TextBlock Text="  //  MOUNTAIN MOVING PLAN  //  NOMINAL" FontSize="9"
                                            FontFamily="{DynamicResource UiFontFamily}"
-                                           Foreground="{DynamicResource TextMutedBrush}" Margin="0,3,0,0"/>
-                                <TextBlock Text="THRUST VECTOR  07.2°  /  CORE TEMP  612K" FontSize="8"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="  //  CORE TEMP 612K" FontSize="9"
                                            FontFamily="{DynamicResource UiFontFamily}"
-                                           Foreground="{DynamicResource SuccessBrush}" Margin="0,5,0,0"/>
+                                           Foreground="{DynamicResource SuccessBrush}"
+                                           VerticalAlignment="Center"/>
                             </StackPanel>
 
-                            <StackPanel x:Name="NavStack" Loaded="NavStack_Loaded">
+                            <!-- 联机大厅专用侧栏：进入联机时替换主侧栏 -->
+        <StackPanel x:Name="NavStackMultiplayer" Visibility="Collapsed">
+            <RadioButton Style="{DynamicResource NavBtn}" GroupName="MpNav" Click="MPBack_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="返回" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="MPNavLobby" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         IsChecked="True" Click="MPNavLobby_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="大厅" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="MPNavChat" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         Click="MPNavChat_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE8BD;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="世界聊天" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="MPNavMyRooms" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         Click="MPNavMyRooms_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE7EF;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="我的房间" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+            <RadioButton x:Name="MPNavFriends" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         Click="MPNavFriends_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="好友" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+        </StackPanel>
+
+        <StackPanel x:Name="NavStack" Loaded="NavStack_Loaded">
                                 <RadioButton Style="{DynamicResource NavBtn}" IsChecked="True"
                                              Click="NavHome_Click">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
@@ -149,6 +196,10 @@
                                                Width="22" TextAlignment="Center" VerticalAlignment="Center"
                                                Margin="0,0,10,0"/>
                                     <TextBlock Text="联机大厅" VerticalAlignment="Center"/>
+                                    <!-- 未读私聊红点 -->
+                                    <Ellipse x:Name="MultiplayerUnreadDot" Width="8" Height="8"
+                                             Fill="#FF3B30" Margin="6,0,0,0"
+                                             VerticalAlignment="Center" Visibility="Collapsed"/>
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Style="{DynamicResource NavBtn}"
@@ -197,11 +248,12 @@
                 </Border>
 
 
-                  <Grid Grid.Column="1" ClipToBounds="True">
-                      <Grid.RowDefinitions>
-                          <RowDefinition Height="{DynamicResource WanderingEarthHudHeight}"/>
-                          <RowDefinition Height="*"/>
-                      </Grid.RowDefinitions>
+                <Grid Grid.Column="1" ClipToBounds="True">
+                    <Grid.RowDefinitions>
+                        <!-- 顶部主题 HUD 已删除（高度 0）：给页面留出完整高度，避免把启动进度条挤下去 -->
+                        <RowDefinition Height="0"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
                       <Canvas IsHitTestVisible="False" Panel.ZIndex="0"
                               Visibility="{DynamicResource CyberpunkVisibility}" Grid.RowSpan="2">
                          <Border Width="220" Height="1" Background="{DynamicResource CyberpunkHudBrush}"

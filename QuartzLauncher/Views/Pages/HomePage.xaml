@@ -13,6 +13,16 @@
                 <TextBlock Text="HOME" Style="{DynamicResource PageEyebrow}"/>
                 <TextBlock Text="开始游戏" Style="{DynamicResource PageTitle}"/>
                 <TextBlock Text="选择实例并启动 Minecraft。" Style="{DynamicResource PageSubtitle}"/>
+
+                <Border x:Name="AccountExpiredCard" Visibility="Collapsed" Margin="0,12,0,0"
+                        Style="{DynamicResource CardStyle}" Padding="14,10">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="账号登录状态已过期（好友、私聊、在线状态需要重新登录）" FontSize="12"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource DangerBrush}"/>
+                        <Button Content="重新登录" Style="{DynamicResource BtnPrimary}" Height="30"
+                                Padding="14,2" Margin="14,0,0,0" Click="ReLoginFromHome_Click"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
 
                 <Grid Grid.Row="1">
@@ -76,7 +86,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="21"
+                                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="6"
                                         Background="{DynamicResource PrimaryBrush}" Cursor="Hand"
                                         MouseLeftButtonDown="Avatar_Click"
                                         x:Name="AvatarBorder" Margin="0,0,14,0">

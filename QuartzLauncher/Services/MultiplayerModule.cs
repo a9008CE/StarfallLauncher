@@ -1,4 +1,4 @@
-#if !FULL_BUILD
+﻿#if !FULL_BUILD
 // ============================================================================
 // 【开源版占位实现】联机模块不包含在开源内容中。
 // 局域网自动发现、房间发布、中继客户端、Mod 同步、防滥用门槛等均为占位，
@@ -71,7 +71,7 @@ public static class PlayTimeGate
 {
     public const long RequiredSeconds = 24 * 3600;
 
-    public static bool IsUnlocked(QuartzLauncher.Models.Settings settings) => false;
+    public static bool IsUnlocked(QuartzLauncher.Models.Settings settings) => true;
 
     public static long RemainingSeconds(QuartzLauncher.Models.Settings settings) => RequiredSeconds;
 
