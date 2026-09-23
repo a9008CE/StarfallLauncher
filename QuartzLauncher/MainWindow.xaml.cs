@@ -239,11 +239,36 @@ public partial class MainWindow : Window
     {
         Loaded -= MainWindow_Loaded;
 
-        // 老版本更新器会留下 <exe>.bak；新版启动成功后清掉，避免用户误以为“下载下来的是 bak”
+        // 清理更新残留：旧版 exe 备份（.bak/.old/.new）与新版暂存目录
         try
         {
-            var backup = Environment.ProcessPath + ".bak";
-            if (!string.IsNullOrEmpty(backup) && File.Exists(backup)) File.Delete(backup);
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                foreach (var suffix in new[] { ".bak", ".old", ".new" })
+                {
+                    var leftover = exe + suffix;
+                    if (File.Exists(leftover)) File.Delete(leftover);
+                }
+            }
+        }
+        catch
+        {
+        }
+        try
+        {
+            var updateRoot = Path.Combine(App.Paths.Root, "update");
+            if (Directory.Exists(updateRoot)) Directory.Delete(updateRoot, true);
+        }
+        catch
+        {
+            // 暂存的更新器可能还在退出中，下次启动再清
+        }
+        try
+        {
+            // 旧版更新器留下的自身副本
+            var oldUpdater = Path.Combine(App.Paths.TempDir, "QuartzLauncher-updater.exe");
+            if (File.Exists(oldUpdater)) File.Delete(oldUpdater);
         }
         catch
         {
