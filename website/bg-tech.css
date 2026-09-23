@@ -1,0 +1,129 @@
+/* ═══════════════════════════════════════════════════════
+   TECH HUD BACKGROUND — White/Gray Theme
+   Inspired by futuristic UI panels
+   ═══════════════════════════════════════════════════════ */
+
+/* ── BASE ────────────────────────────────────────────── */
+.tech-bg{display:none;position:fixed;inset:0;z-index:0;overflow:hidden;background:#e7ebef}
+html.light .tech-bg{display:block}
+.tech-bg::before{content:"";position:absolute;inset:0;background:
+  linear-gradient(90deg,transparent 0 49.8%,rgba(71,85,105,.08) 50%,transparent 50.2%),
+  linear-gradient(0deg,transparent 0 49.8%,rgba(71,85,105,.08) 50%,transparent 50.2%),
+  linear-gradient(135deg,rgba(255,255,255,.72),transparent 42%),
+  linear-gradient(315deg,rgba(148,163,184,.18),transparent 48%);background-size:120px 120px,120px 120px,100% 100%,100% 100%;opacity:.7}
+.tech-bg::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 70px,rgba(71,85,105,.045) 70px 71px,transparent 71px 140px);opacity:.8;animation:techSweep 28s linear infinite}
+@keyframes techSweep{to{background-position:280px 0}}
+.tech-bg *{position:absolute;pointer-events:none}
+
+/* ── CIRCUIT TRACES ──────────────────────────────────── */
+.tech-bg .traces{inset:0;opacity:.08}
+.tech-bg .traces svg{width:100%;height:100%}
+
+/* ── GRID OVERLAY ────────────────────────────────────── */
+.tech-bg .grid{inset:0;
+  background-image:
+    linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 70% 60% at 50% 40%,#000 20%,transparent 70%);
+  animation:gridPulse 8s ease-in-out infinite alternate}
+@keyframes gridPulse{0%{opacity:.5}100%{opacity:.8}}
+
+/* ── DEPTH WIRES ─────────────────────────────────────── */
+.tech-bg .wires{inset:0;opacity:.06}
+.tech-bg .wires::before,.tech-bg .wires::after{content:"";position:absolute}
+.tech-bg .wires::before{top:20%;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 5%,rgba(0,0,0,.3) 20%,rgba(0,0,0,.3) 80%,transparent 95%)}
+.tech-bg .wires::after{top:70%;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 10%,rgba(0,0,0,.2) 30%,rgba(0,0,0,.2) 70%,transparent 90%)}
+
+/* ── FLOATING HEXAGONS ──────────────────────────────── */
+.tech-bg .hex-float{inset:0}
+.tech-bg .hex{position:absolute;border:1px solid rgba(0,0,0,.06);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);animation:hexFloat 20s ease-in-out infinite}
+.tech-bg .hex:nth-child(1){width:120px;height:104px;top:10%;left:5%;animation-delay:0s;opacity:.4}
+.tech-bg .hex:nth-child(2){width:80px;height:69px;top:60%;right:8%;animation-delay:-5s;opacity:.3}
+.tech-bg .hex:nth-child(3){width:60px;height:52px;top:30%;right:15%;animation-delay:-10s;opacity:.25}
+.tech-bg .hex:nth-child(4){width:100px;height:87px;bottom:15%;left:12%;animation-delay:-15s;opacity:.35}
+.tech-bg .hex::before{content:"";position:absolute;inset:8px;border:1px solid rgba(0,0,0,.04);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)}
+@keyframes hexFloat{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-8px) rotate(2deg)}50%{transform:translateY(4px) rotate(-1deg)}75%{transform:translateY(-4px) rotate(1deg)}}
+
+/* ── HORIZONTAL DATA LINES ──────────────────────────── */
+.tech-bg .data-lines{inset:0;overflow:hidden}
+.tech-bg .dline{position:absolute;height:1px;opacity:.08;animation:dataFlow 12s linear infinite}
+.tech-bg .dline:nth-child(1){top:18%;width:40%;left:-10%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.5),transparent);animation-duration:10s}
+.tech-bg .dline:nth-child(2){top:35%;width:60%;right:-20%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.4),transparent);animation-duration:14s;animation-direction:reverse}
+.tech-bg .dline:nth-child(3){top:55%;width:35%;left:10%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.3),transparent);animation-duration:11s}
+.tech-bg .dline:nth-child(4){top:75%;width:50%;right:5%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.35),transparent);animation-duration:13s;animation-direction:reverse}
+.tech-bg .dline:nth-child(5){top:88%;width:45%;left:-5%;background:linear-gradient(90deg,transparent,rgba(0,0,0,.25),transparent);animation-duration:9s}
+@keyframes dataFlow{0%{transform:translateX(-100%)}100%{transform:translateX(200%)}}
+
+/* ── CORNER BRACKETS ─────────────────────────────────── */
+.tech-bg .bracket{position:absolute;width:80px;height:80px;border:1.5px solid rgba(0,0,0,.07)}
+.tech-bg .bracket.tl{top:40px;left:40px;border-right:none;border-bottom:none}
+.tech-bg .bracket.tr{top:40px;right:40px;border-left:none;border-bottom:none}
+.tech-bg .bracket.bl{bottom:40px;left:40px;border-right:none;border-top:none}
+.tech-bg .bracket.br{bottom:40px;right:40px;border-left:none;border-top:none}
+.tech-bg .bracket::after{content:"";position:absolute;width:6px;height:6px;background:rgba(0,0,0,.1);border-radius:50%}
+.tech-bg .bracket.tl::after{top:-3px;left:-3px}
+.tech-bg .bracket.tr::after{top:-3px;right:-3px}
+.tech-bg .bracket.bl::after{bottom:-3px;left:-3px}
+.tech-bg .bracket.br::after{bottom:-3px;right:-3px}
+
+/* ── WARNING STRIPES ─────────────────────────────────── */
+.tech-bg .stripes{position:absolute;width:140px;height:30px;top:50%;right:0;transform:translateY(-50%);opacity:.06;
+  background:repeating-linear-gradient(-45deg,transparent,transparent 4px,rgba(0,0,0,.4) 4px,rgba(0,0,0,.4) 8px)}
+.tech-bg .stripes.btm{top:auto;bottom:60px;right:auto;left:0;width:100px;height:20px;transform:none}
+
+/* ── NODE POINTS ─────────────────────────────────────── */
+.tech-bg .nodes{inset:0}
+.tech-bg .node{position:absolute;width:4px;height:4px;border-radius:50%;background:rgba(0,0,0,.12);animation:nodePulse 3s ease-in-out infinite}
+.tech-bg .node::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid rgba(0,0,0,.05);animation:nodeRing 3s ease-in-out infinite}
+.tech-bg .node:nth-child(1){top:22%;left:18%;animation-delay:0s}
+.tech-bg .node:nth-child(2){top:45%;left:65%;animation-delay:-.8s}
+.tech-bg .node:nth-child(3){top:70%;left:30%;animation-delay:-1.6s}
+.tech-bg .node:nth-child(4){top:15%;left:75%;animation-delay:-2.4s}
+.tech-bg .node:nth-child(5){top:80%;left:85%;animation-delay:-.4s}
+.tech-bg .node:nth-child(6){top:50%;left:10%;animation-delay:-1.2s}
+@keyframes nodePulse{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.8;transform:scale(1.5)}}
+@keyframes nodeRing{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(2);opacity:0}}
+
+/* ── VERTICAL SCANNER ────────────────────────────────── */
+.tech-bg .scanner{left:50%;top:0;width:1px;height:100%;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.06) 20%,rgba(0,0,0,.06) 80%,transparent);
+  animation:scanV 6s ease-in-out infinite}
+.tech-bg .scanner::before{content:"";position:absolute;top:0;left:-3px;width:7px;height:7px;border-radius:50%;background:rgba(0,0,0,.08);animation:scanDot 6s ease-in-out infinite}
+@keyframes scanV{0%,100%{opacity:.3}50%{opacity:.7}}
+@keyframes scanDot{0%{top:0}100%{top:100%}}
+
+/* ── FOCUS GLOW ──────────────────────────────────────── */
+.tech-bg .glow{inset:0;
+  background:
+    radial-gradient(ellipse 40% 30% at 30% 40%,rgba(0,0,0,.02) 0%,transparent 70%),
+    radial-gradient(ellipse 30% 40% at 70% 60%,rgba(0,0,0,.015) 0%,transparent 70%);
+  animation:glowShift 10s ease-in-out infinite alternate}
+@keyframes glowShift{0%{opacity:.5}100%{opacity:1}}
+
+/* ── SCAN LINES ──────────────────────────────────────── */
+.tech-bg .scanlines{inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.008) 3px,rgba(0,0,0,.008) 6px)}
+
+/* ── DATA BLOCKS ─────────────────────────────────────── */
+.tech-bg .datablocks{inset:0}
+.tech-bg .dblock{position:absolute;border:1px solid rgba(0,0,0,.04);animation:dbFloat 15s ease-in-out infinite}
+.tech-bg .dblock:nth-child(1){width:120px;height:40px;top:25%;left:60%;animation-delay:0s}
+.tech-bg .dblock:nth-child(2){width:80px;height:25px;top:65%;left:20%;animation-delay:-4s}
+.tech-bg .dblock:nth-child(3){width:60px;height:60px;top:40%;left:80%;animation-delay:-8s;border-radius:4px}
+.tech-bg .dblock::before{content:"";position:absolute;top:4px;left:4px;right:4px;height:2px;background:rgba(0,0,0,.06);box-shadow:0 6px 0 rgba(0,0,0,.04),0 12px 0 rgba(0,0,0,.03)}
+@keyframes dbFloat{0%,100%{transform:translate(0,0);opacity:.3}50%{transform:translate(-5px,3px);opacity:.6}}
+
+/* ── CONNECTOR DOTS ──────────────────────────────────── */
+.tech-bg .connectors{inset:0;opacity:.05}
+.tech-bg .conn{position:absolute;height:1px;background:repeating-linear-gradient(90deg,rgba(0,0,0,.4) 0 4px,transparent 4px 8px)}
+.tech-bg .conn:nth-child(1){top:30%;left:5%;width:25%;transform:rotate(-2deg)}
+.tech-bg .conn:nth-child(2){top:60%;right:5%;width:20%;transform:rotate(1deg)}
+.tech-bg .conn:nth-child(3){top:85%;left:15%;width:30%;transform:rotate(-1deg)}
+
+/* ── ARCHIVE MARKS ───────────────────────────────────── */
+.tech-bg .marks{inset:0;opacity:.04;font-family:"JetBrains Mono",monospace;font-size:8px;letter-spacing:2px;color:#000}
+.tech-bg .mark{position:absolute}
+.tech-bg .mark:nth-child(1){top:12%;left:5%}
+.tech-bg .mark:nth-child(2){top:88%;right:5%}
+.tech-bg .mark::before{content:attr(data-text)}

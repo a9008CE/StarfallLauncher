@@ -37,10 +37,11 @@ QuartzLauncher/          启动器源码（WPF + .NET 8）
   Services/              下载、启动、主题、更新、日志分析等服务
   Themes/                样式与配色
   Views/                 页面
+website/                 官网静态站点（v2.0：首页 / 公告 / 服务器 / 赞助）
 QuartzLauncher.sln       解决方案
 ```
 
-> 官网（`website/`）不参与开源，未包含在本仓库中。
+> 官网（`website/`）为纯静态页面，源码包含在本仓库中。
 
 ## 构建
 
@@ -55,7 +56,7 @@ dotnet publish QuartzLauncher/QuartzLauncher.csproj -c Release -o dist
 ## 说明
 
 - `Launcher/` 与 `.minecraft/` 为运行时数据目录（含账号信息），已在 `.gitignore` 中排除
-- 官网（`website/`）不参与开源
+- 官网（`website/`）为纯静态页面（HTML/CSS/JS，无构建步骤），包含在本仓库中
 
 ## 许可证
 

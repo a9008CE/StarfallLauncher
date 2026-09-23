@@ -1,0 +1,321 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="星落 LaunCher - Minecraft 轻量启动与内容管理工具">
+<title>星落 LaunCher | 官网</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles-v2.css">
+</head>
+<body>
+<div class="bg"></div><div class="bg-grid"></div>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="#top">
+      <span class="brand-mark">
+        <svg viewBox="0 0 36 36" fill="none"><path d="M18 2L32 10v16l-14 8L4 26V10L18 2z" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="17" r="3.2" fill="currentColor"/></svg>
+      </span>
+      <span><b>星落 LaunCher</b><small>STARFALL</small></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#showcase">界面</a>
+      <a href="#install">安装</a>
+      <a href="#faq">FAQ</a>
+      <a href="announcements.html">公告</a>
+      <a href="sponsor.html">赞助</a>
+      <a href="server.html">官方服务器</a>
+    </nav>
+    <a class="nav-cta" href="https://starfallmc.top/updates/QuartzLauncher-1.1.0.exe">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      免费下载
+    </a>
+  </div>
+</header>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="badge"><span class="dot"></span>v1.1.0 · 联机 2.0 / 账号好友聊天 已上线</div>
+      <h1 class="hero-title">把每一次<br><span class="grad">启动</span>交给星落</h1>
+      <p class="hero-sub">面向 Minecraft 的轻量启动与内容管理工具。版本、Java、Mod、皮肤与资源，一个控制台全搞定。</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://starfallmc.top/updates/QuartzLauncher-1.1.0.exe">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载 Windows 版
+        </a>
+        <a class="btn btn-ghost" href="announcements.html">查看更新清单 →</a>
+        <a class="btn btn-ghost" href="https://github.com/a9008CE/StarfallLauncher" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-1.94c-3.2.7-3.87-1.54-3.87-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.96.1-.75.4-1.25.72-1.54-2.55-.29-5.23-1.28-5.23-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 015.78 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.24 2.76.12 3.05.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.35.77 1.05.77 2.12v3.14c0 .31.2.67.8.55A11.51 11.51 0 0023.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+          GitHub 开源
+        </a>
+      </div>
+      <div class="hero-meta">
+        <span class="pill">当前版本 <b>1.1.0</b></span>
+        <span class="pill">平台 <b>Windows x64</b></span>
+        <span class="pill">大小 <b>3.12 MB</b></span>
+      </div>
+      <div class="hero-shot reveal">
+        <div class="shot-bar"><i></i><i></i><i></i><span>STARFALL LAUNCHER // 1.1.0</span></div>
+        <img src="shot-home.png" alt="星落 LaunCher 主界面">
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section style="padding:12px 0 44px">
+    <div class="wrap">
+      <div class="stats reveal">
+        <div class="stat"><b>1.0 ~ 最新</b><span>全版本 Minecraft 支持</span></div>
+        <div class="stat"><b>CF + MR</b><span>双源内容中心</span></div>
+        <div class="stat"><b>64 线程</b><span>多线程分片下载</span></div>
+        <div class="stat"><b>6 套主题</b><span>深浅色自由切换</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow">System Capabilities</p>
+        <h2 class="title">为游玩准备，<em>不是为等待</em></h2>
+        <p class="section-sub">从下载、安装到启动，每一步都替你做完。</p>
+      </div>
+      <div class="cards" style="margin-top:44px">
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+          <h3>版本控制</h3><p>按 Minecraft 版本与加载器管理实例，支持 Forge / Fabric / Quilt / NeoForge，启动路径清楚可见。</p>
+        </article>
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+          <h3>内容中心</h3><p>浏览 Mod、整合包、光影与资源包，自动解析并下载前置依赖，无需手动寻找。</p>
+        </article>
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+          <h3>Java 管理</h3><p>自动检测本地 Java，一键下载 Temurin 运行环境（清华镜像加速），版本匹配不再折腾。</p>
+        </article>
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <h3>皮肤与 3D 预览</h3><p>离线模式支持本地皮肤库、Steve / Alex 模型切换与 3D 外层渲染预览。</p>
+        </article>
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 21v-2a4 4 0 00-3-3.87"/><path d="M9 21v-2a4 4 0 013-3.87"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><circle cx="17" cy="7" r="4"/></svg></span>
+          <h3>联机 2.0</h3><p>账号编码、好友申请与实时推送、世界聊天与私聊、一键加入房主世界。</p>
+        </article>
+        <article class="card reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
+          <h3>自动更新</h3><p>启动时自动检查新版本，后台静默下载，更新完成后自动替换并重启，不打断游戏节奏。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE -->
+  <section id="showcase">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow">Preview</p>
+        <h2 class="title">一览<em>启动器界面</em></h2>
+        <p class="section-sub">11 张 1.1.0 实机截图，点左侧切换查看。</p>
+      </div>
+      <div class="showcase" style="margin-top:40px">
+        <div class="ssh-tabs reveal">
+          <button class="ssh-tab active" data-pane="0"><b>首页</b>实例管理与一键启动</button>
+          <button class="ssh-tab" data-pane="1"><b>版本库</b>版本列表与创建实例</button>
+          <button class="ssh-tab" data-pane="2"><b>资源中心</b>Mod 浏览与分类筛选</button>
+          <button class="ssh-tab" data-pane="3"><b>联机大厅</b>房间列表与一键加入</button>
+          <button class="ssh-tab" data-pane="4"><b>世界聊天</b>频道聊天与图片消息</button>
+          <button class="ssh-tab" data-pane="5"><b>好友</b>账号编码与好友同步</button>
+          <button class="ssh-tab" data-pane="6"><b>服务器</b>服务器列表</button>
+          <button class="ssh-tab" data-pane="7"><b>皮肤 / 预览</b>本地皮肤与 3D 模型</button>
+          <button class="ssh-tab" data-pane="8"><b>设置</b>Java 管理与版本隔离</button>
+          <button class="ssh-tab" data-pane="9"><b>更多功能</b>主题 / 动画 / 工具</button>
+          <button class="ssh-tab" data-pane="10"><b>帮助</b>使用文档与指南</button>
+        </div>
+        <div class="ssh-stage reveal">
+          <div class="ssh-pane active"><div class="ssh-cap"><b>首页</b><span>实例管理 · 一键启动 · 更新公告</span></div><img src="shot-home.png" alt="首页"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>版本库</b><span>版本列表 · 创建实例</span></div><img src="shot-versions.png" alt="版本库" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>资源中心</b><span>Mod 浏览 · 分类筛选</span></div><img src="shot-mods.png" alt="资源中心" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>联机大厅</b><span>房间列表 · 一键加入</span></div><img src="shot-multiplayer.png" alt="联机大厅" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>世界聊天</b><span>频道聊天 · 图片消息</span></div><img src="shot-chat.png" alt="世界聊天" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>好友</b><span>账号编码 · 好友同步</span></div><img src="shot-friends.png" alt="好友" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>服务器</b><span>服务器列表</span></div><img src="shot-server.png" alt="服务器" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>皮肤 / 预览</b><span>本地皮肤 · 3D 模型</span></div><img src="shot-skin.png" alt="皮肤预览" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>设置</b><span>Java 管理 · 版本隔离</span></div><img src="shot-settings.png" alt="设置" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>更多功能</b><span>主题 / 动画 / 工具</span></div><img src="shot-more.png" alt="更多功能" loading="lazy"></div>
+          <div class="ssh-pane"><div class="ssh-cap"><b>帮助</b><span>使用文档与指南</span></div><img src="shot-help.png" alt="帮助" loading="lazy"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section id="install">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow">Installation</p>
+        <h2 class="title">三步开始，<em>零门槛</em></h2>
+      </div>
+      <div class="steps" style="margin-top:44px">
+        <div class="step reveal">
+          <div class="num">STEP 01</div>
+          <h3>下载启动器</h3>
+          <p>点击「下载 Windows 版」，保存 <code>QuartzLauncher-1.1.0.exe</code> 到任意位置。</p>
+        </div>
+        <div class="step reveal">
+          <div class="num">STEP 02</div>
+          <h3>准备 Java 17+</h3>
+          <p>首次启动会提示缺少 Java，点确定即可自动下载 Temurin 17；也可手动安装后指定路径。</p>
+          <div class="tip">推荐：<a href="https://adoptium.net/temurin/releases/?version=17" target="_blank">Eclipse Temurin 17 ↗</a></div>
+        </div>
+        <div class="step reveal">
+          <div class="num">STEP 03</div>
+          <h3>开始游戏</h3>
+          <p>选择版本与加载器，点启动。游戏文件、补丁与资源会自动补全。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="reveal" style="text-align:center">
+        <p class="eyebrow" style="justify-content:center">FAQ</p>
+        <h2 class="title">常见问题，<em>快速解答</em></h2>
+      </div>
+      <div class="faq" style="margin-top:40px">
+        <details class="q reveal"><summary>星落 LaunCher 支持哪些 Minecraft 版本？</summary><div class="a">支持从 1.0 到最新版本的几乎所有 Minecraft 版本，包括 Forge、Fabric、Quilt、NeoForge 等主流加载器。</div></details>
+        <details class="q reveal"><summary>启动器需要什么 Java 版本？</summary><div class="a">启动器本身需要 Java 17 或更高版本运行；Minecraft 的 Java 需求由启动器自动管理，不同版本的游戏会匹配对应的 Java。</div></details>
+        <details class="q reveal"><summary>如何离线游玩？</summary><div class="a">在设置中选择「离线模式」，输入游戏用户名即可。离线模式支持自定义皮肤库和 Steve / Alex 模型切换。</div></details>
+        <details class="q reveal"><summary>Mod 自动依赖解析是怎么工作的？</summary><div class="a">安装 Mod 时，启动器会自动扫描依赖列表，从 CurseForge 或 Modrinth 下载缺失的前置 Mod，无需手动逐个查找安装。</div></details>
+        <details class="q reveal"><summary>启动器会自动更新吗？</summary><div class="a">会。每次启动自动检查新版本，发现更新后后台下载，由新版直接完成替换并重启，不丢任何数据。</div></details>
+        <details class="q reveal"><summary>更新后启动器不见了怎么办？</summary><div class="a">更新过程会写入日志 Launcher/update-apply.log；新版启动成功后会自动清理旧版备份，如遇异常可检查日志排查。</div></details>
+        <details class="q reveal"><summary>支持 macOS 或 Linux 吗？</summary><div class="a">目前仅支持 Windows x64；macOS 与 Linux 支持已在计划中。</div></details>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact">
+    <div class="wrap">
+      <div class="reveal">
+        <p class="eyebrow">Contact</p>
+        <h2 class="title">有问题？<em>直接联系</em></h2>
+      </div>
+      <div class="contacts" style="margin-top:40px">
+        <div class="contact reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span>
+          <h3>QQ 群 · 苏随安的小屋</h3><p>获取即时支持与更新通知</p>
+          <div class="copy"><code>1124014660</code><button data-copy="1124014660" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+        </div>
+        <div class="contact reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+          <h3>邮箱</h3><p>反馈 Bug 或提交建议</p>
+          <div class="copy"><code>2840109628@qq.com</code><button data-copy="2840109628@qq.com" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+        </div>
+        <div class="contact reveal">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8.5 14.5c-3.038 0-5.5-1.79-5.5-4s2.462-4 5.5-4c2.69 0 4.94 1.34 5.38 3.18"/><path d="M15.5 10.5c3.038 0 5.5 1.79 5.5 4s-2.462 4-5.5 4c-.64 0-1.25-.09-1.83-.25"/><circle cx="7" cy="10" r=".8" fill="currentColor"/><circle cx="10" cy="10" r=".8" fill="currentColor"/><circle cx="14" cy="14" r=".8" fill="currentColor"/><circle cx="17" cy="14" r=".8" fill="currentColor"/></svg></span>
+          <h3>微信</h3><p>加后请备注来意</p>
+          <div class="copy"><code>ARM9008CE</code><button data-copy="ARM9008CE" title="复制"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section style="padding-bottom:0">
+    <div class="wrap">
+      <div class="cta reveal">
+        <h2>准备好了吗？</h2>
+        <p>下载最新版，打开启动器即可自动检查后续更新。</p>
+        <a class="btn btn-primary" href="https://starfallmc.top/updates/QuartzLauncher-1.1.0.exe">
+          获取 1.1.0
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2026 星落 LaunCher</span>
+    <span class="mono">官网 v2.0 · BUILD 1.1.0</span>
+    <div class="right">
+      <a href="announcements.html">更新公告</a>
+      <a href="sponsor.html">赞助</a>
+      <a href="https://github.com/a9008CE/StarfallLauncher" target="_blank">GitHub ↗</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* 星野 + 流星 */
+(function(){
+  const c=document.getElementById('stars'),x=c.getContext('2d');
+  let w,h,stars=[],meteors=[];
+  function resize(){w=c.width=innerWidth*devicePixelRatio;h=c.height=innerHeight*devicePixelRatio;
+    c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';
+    stars=Array.from({length:150},()=>({x:Math.random()*w,y:Math.random()*h,r:Math.random()*1.3*devicePixelRatio,
+      p:Math.random()*Math.PI*2,s:.4+Math.random()*1.1}))}
+  resize();addEventListener('resize',resize);
+  function spawnMeteor(){
+    if(meteors.length>3)return;
+    const d=devicePixelRatio,fromLeft=Math.random()<.5;
+    meteors.push({x:fromLeft?-120:Math.random()*w,y:Math.random()*h*.45,
+      vx:(fromLeft?1:-1)*(5.5+Math.random()*4.5)*d, vy:(4.5+Math.random()*3.5)*d,
+      len:(110+Math.random()*130)*d, life:1});
+  }
+  setInterval(spawnMeteor,2400);
+  setTimeout(spawnMeteor,700);
+  (function tick(t){
+    x.clearRect(0,0,w,h);
+    for(const s of stars){const a=.18+.5*Math.abs(Math.sin(t/1400*s.s+s.p));
+      x.beginPath();x.arc(s.x,s.y,s.r,0,7);x.fillStyle='rgba(190,215,255,'+a.toFixed(3)+')';x.fill()}
+    for(let i=meteors.length-1;i>=0;i--){
+      const m=meteors[i],sp=Math.hypot(m.vx,m.vy);
+      m.x+=m.vx;m.y+=m.vy;m.life-=.007;
+      if(m.life<=0||m.x<-m.len-200||m.x>w+m.len+200||m.y>h+m.len){meteors.splice(i,1);continue}
+      const nx=m.x-m.vx/sp*m.len,ny=m.y-m.vy/sp*m.len;
+      const g=x.createLinearGradient(m.x,m.y,nx,ny);
+      g.addColorStop(0,'rgba(205,232,255,'+(0.9*m.life).toFixed(3)+')');
+      g.addColorStop(1,'rgba(205,232,255,0)');
+      x.strokeStyle=g;x.lineWidth=1.6*devicePixelRatio;x.lineCap='round';
+      x.beginPath();x.moveTo(m.x,m.y);x.lineTo(nx,ny);x.stroke();
+    }
+    requestAnimationFrame(tick)
+  })(0)
+})();
+/* 滚动浮现 */
+(function(){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),
+    {threshold:.12,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+})();
+/* 截图切换 */
+document.querySelectorAll('.ssh-tab').forEach(btn=>btn.addEventListener('click',()=>{
+  document.querySelectorAll('.ssh-tab').forEach(b=>b.classList.toggle('active',b===btn));
+  const i=btn.dataset.pane;
+  document.querySelectorAll('.ssh-pane').forEach((p,n)=>p.classList.toggle('active',String(n)===i));
+}));
+/* 复制 */
+document.querySelectorAll('.copy button').forEach(b=>b.addEventListener('click',()=>{
+  navigator.clipboard&&navigator.clipboard.writeText(b.dataset.copy);
+  const old=b.innerHTML;b.innerHTML='✓';setTimeout(()=>b.innerHTML=old,1200);
+}));
+/* 卡片光标光晕 */
+document.querySelectorAll('.card').forEach(card=>card.addEventListener('mousemove',e=>{
+  const r=card.getBoundingClientRect();
+  card.style.setProperty('--mx',(e.clientX-r.left)+'px');
+  card.style.setProperty('--my',(e.clientY-r.top)+'px');
+}));
+</script>
+</body>
+</html>

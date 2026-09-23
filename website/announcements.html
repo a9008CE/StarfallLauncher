@@ -1,0 +1,236 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="星落 LaunCher 更新公告">
+<title>更新公告 | 星落 LaunCher</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="stylesheet" href="styles-v2.css">
+</head>
+<body>
+<div class="bg"></div><div class="bg-grid"></div>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+
+<header class="nav">
+  <div class="nav-in">
+    <a class="brand" href="index.html">
+      <span class="brand-mark">
+        <svg viewBox="0 0 36 36" fill="none"><path d="M18 2L32 10v16l-14 8L4 26V10L18 2z" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="17" r="3.2" fill="currentColor"/></svg>
+      </span>
+      <span><b>星落 LaunCher</b><small>STARFALL</small></span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#features">功能</a>
+      <a href="index.html#showcase">界面</a>
+      <a href="index.html#install">安装</a>
+      <a href="index.html#faq">FAQ</a>
+      <a href="announcements.html" class="on">公告</a>
+      <a href="sponsor.html">赞助</a>
+      <a href="server.html">官方服务器</a>
+    </nav>
+    <a class="nav-back" href="index.html">← 返回首页</a>
+    <a class="nav-cta" href="https://starfallmc.top/updates/QuartzLauncher-1.1.0.exe">免费下载</a>
+  </div>
+</header>
+
+<main>
+  <section class="page-head">
+    <div class="wrap">
+      <a class="crumb" href="index.html">← 返回首页</a>
+      <p class="eyebrow">Announcements</p>
+      <h1 class="title">更新<em>公告</em></h1>
+      <p class="section-sub">每一个版本的改动都记录在这里，从下往上依次是最新版本。</p>
+      <div class="legend"><span class="n"><i></i>新增 / 优化</span><span class="f"><i></i>修复</span></div>
+    </div>
+  </section>
+
+  <section style="padding:0 0 40px">
+    <div class="wrap">
+      <div class="ann-list">
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.1.0</span>
+            <span class="ann-date">2026-09-23</span>
+            <span class="ann-tag">最新</span>
+          </div>
+          <h3>联机 2.0 · 账号与好友</h3>
+          <ul>
+            <li>账号体系 — 9 位数字编码 + 密码，好友云端同步，支持邮箱找回编码</li>
+            <li>好友 — 申请制加好友、实时推送（≤1 秒）、在线状态与皮肤头像</li>
+            <li>聊天 — 世界频道 + 私聊，图片消息、引用回复与 48 小时本地记录</li>
+            <li>联机大厅侧栏（大厅 / 世界聊天 / 我的房间 / 好友）与未读红点</li>
+            <li class="fix">修复好友与私聊实时推送未生效、未读红点重复计数</li>
+            <li class="fix">修复引用回复发送后不清除、快速连点导致重复发送</li>
+            <li class="fix">修复游戏启动中「加入房间」地址残留，导致下次普通启动误连</li>
+            <li class="fix">修复首页自定义头像不显示、重新登录失败无提示</li>
+            <li class="fix">修复离开联机页后仍在后台轮询房间与好友列表</li>
+          </ul>
+        </article>
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.0.4</span>
+            <span class="ann-date">2026-09-21</span>
+          </div>
+          <h3>修复与体验优化</h3>
+          <ul>
+            <li class="fix">修复登录弹窗等 9 处按钮文字被上下裁切</li>
+            <li class="fix">删除版本现在会真正删除文件，失败时明确提示原因</li>
+            <li class="fix">已删除的版本不再出现在首页，启动时自动清理失效实例记录</li>
+            <li>地图下载 — 卡片可直接下载，改为多线程分片，速度明显提升</li>
+            <li>开屏动画更柔和，去掉了开始时的黑屏一闪</li>
+            <li>首页版本下拉显示具体版本号</li>
+            <li>地图下载入口移到资源分类组，不再挂在下载管理下面</li>
+          </ul>
+        </article>
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.0.3</span>
+            <span class="ann-date">2026-09-20</span>
+          </div>
+          <h3>下载提速 · Mod 浏览增强</h3>
+          <ul>
+            <li>下载并发默认提升到 64（设置页最高 128），补全游戏文件明显更快</li>
+            <li>Mod 图标 / 详情图本地缓存，同一张图只下载一次，重启也不用重下</li>
+            <li>Mod 浏览显示中文名（MCmod 匹配）与支持的版本 / 加载器</li>
+            <li>地图下载 — 卡片统一高度、自动补全完整简介，「返回列表」移到左上角</li>
+            <li class="fix">修复游戏日志中文乱码（按 UTF-8 读取游戏输出）</li>
+            <li class="fix">修复版本列表「已下载」误标与未完成安装被判定为「已经安装过」</li>
+            <li class="fix">修复 Mod 浏览页入场动画偶发空引用崩溃</li>
+          </ul>
+        </article>
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.0.2</span>
+            <span class="ann-date">2026-09-19</span>
+          </div>
+          <h3>联机大厅上线</h3>
+          <ul>
+            <li>联机大厅 — 自动发现局域网世界，一键公开房间</li>
+            <li>公开房可直接在中继地址进入；密码房凭房间号+密码加入</li>
+            <li>一键加入 — 点「加入房间」自动启动游戏并直连</li>
+            <li>Mod 自动同步 — 加入时比对房主清单并下载缺失项</li>
+            <li>房间详情 — 房间号 / 版本 / 房主ID / 连接地址（一键复制）</li>
+            <li>启动加速 — 版本与资源索引离线缓存、natives 复用</li>
+            <li>下载提速 — 文件校验缓存 + 并行校验</li>
+            <li>内存优化 — 启动前整理物理内存，自动选用 ZGC / G1GC</li>
+            <li class="fix">修复关闭局域网后房间仍显示</li>
+            <li class="fix">修复分析日志输出冗长：改为「原因 + 解决方法」并自动汉化</li>
+            <li class="fix">移除按 Alt 时的焦点虚线框</li>
+            <li class="fix">版本列表 3 小时自动刷新，新版本及时出现</li>
+          </ul>
+        </article>
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.0.1</span>
+            <span class="ann-date">2026-09-14</span>
+          </div>
+          <h3>分析日志焕新 · 启动进度条</h3>
+          <ul>
+            <li>分析日志 — 直接给出「原因 + 解决方法」，输出完毕自动汉化</li>
+            <li>联网 AI 分析 — 同样只保留「原因 / 解决方法」两段</li>
+            <li>首页启动进度条 — 常驻显示：请启动游戏 / 游戏已启动 / 游戏异常（变红）</li>
+            <li>启动时始终自动检查更新，不再依赖手动开关</li>
+            <li class="fix">主题过渡动画重做 — 修复卡片提前变色，卡片跟随动画一起变色</li>
+            <li class="fix">UI 风格切换接入同一套遮罩过渡动画</li>
+            <li class="fix">Mod 下载遵循版本隔离 — 开启隔离用实例独立 mods，未开启用公共 mods</li>
+            <li class="fix">前置 Mod 自动匹配适配版本（游戏版本 + 加载器），不再拉最新版</li>
+            <li class="fix">首页布局优化 — 去掉整体滚动条、移除玩家 UUID 显示</li>
+          </ul>
+        </article>
+
+        <article class="ann reveal">
+          <div class="ann-head">
+            <span class="ann-ver">v1.0.0</span>
+            <span class="ann-date">2026-09-07</span>
+          </div>
+          <h3>首次发布</h3>
+          <ul>
+            <li>版本管理 — 按 Minecraft 版本与加载器管理实例</li>
+            <li>内容中心 — CurseForge / Modrinth Mod 浏览与下载</li>
+            <li>Mod 依赖自动解析 — 递归下载缺失前置</li>
+            <li>Java 管理 — 自动检测、一键下载 Temurin 17</li>
+            <li>离线皮肤 — 本地皮肤库、Steve / Alex 切换、3D 预览</li>
+            <li>自动更新 — 启动时检查、后台静默下载、一键替换</li>
+            <li>6 套主题 — minimal / minecraft / frosted / flat / cyberpunk / wanderingearth</li>
+            <li>丝滑滚动 — 自定义缓动、逐帧平滑</li>
+            <li class="fix">下载速度显示修复 — 指数平滑算法</li>
+            <li class="fix">Java 自动安装 — 线程安全 UI 更新、补偿安装重试</li>
+          </ul>
+        </article>
+
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>© 2026 星落 LaunCher</span>
+    <span class="mono">官网 v2.0 · BUILD 1.1.0</span>
+    <div class="right">
+      <a href="index.html">首页</a>
+      <a href="sponsor.html">赞助</a>
+      <a href="https://github.com/a9008CE/StarfallLauncher" target="_blank">GitHub ↗</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* 星野 + 流星 */
+(function(){
+  const c=document.getElementById('stars'),x=c.getContext('2d');
+  let w,h,stars=[],meteors=[];
+  function resize(){w=c.width=innerWidth*devicePixelRatio;h=c.height=innerHeight*devicePixelRatio;
+    c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';
+    stars=Array.from({length:150},()=>({x:Math.random()*w,y:Math.random()*h,r:Math.random()*1.3*devicePixelRatio,
+      p:Math.random()*Math.PI*2,s:.4+Math.random()*1.1}))}
+  resize();addEventListener('resize',resize);
+  function spawnMeteor(){
+    if(meteors.length>3)return;
+    const d=devicePixelRatio,fromLeft=Math.random()<.5;
+    meteors.push({x:fromLeft?-120:Math.random()*w,y:Math.random()*h*.45,
+      vx:(fromLeft?1:-1)*(5.5+Math.random()*4.5)*d, vy:(4.5+Math.random()*3.5)*d,
+      len:(110+Math.random()*130)*d, life:1});
+  }
+  setInterval(spawnMeteor,2400);
+  setTimeout(spawnMeteor,700);
+  (function tick(t){
+    x.clearRect(0,0,w,h);
+    for(const s of stars){const a=.18+.5*Math.abs(Math.sin(t/1400*s.s+s.p));
+      x.beginPath();x.arc(s.x,s.y,s.r,0,7);x.fillStyle='rgba(190,215,255,'+a.toFixed(3)+')';x.fill()}
+    for(let i=meteors.length-1;i>=0;i--){
+      const m=meteors[i],sp=Math.hypot(m.vx,m.vy);
+      m.x+=m.vx;m.y+=m.vy;m.life-=.007;
+      if(m.life<=0||m.x<-m.len-200||m.x>w+m.len+200||m.y>h+m.len){meteors.splice(i,1);continue}
+      const nx=m.x-m.vx/sp*m.len,ny=m.y-m.vy/sp*m.len;
+      const g=x.createLinearGradient(m.x,m.y,nx,ny);
+      g.addColorStop(0,'rgba(205,232,255,'+(0.9*m.life).toFixed(3)+')');
+      g.addColorStop(1,'rgba(205,232,255,0)');
+      x.strokeStyle=g;x.lineWidth=1.6*devicePixelRatio;x.lineCap='round';
+      x.beginPath();x.moveTo(m.x,m.y);x.lineTo(nx,ny);x.stroke();
+    }
+    requestAnimationFrame(tick)
+  })(0)
+})();
+/* 滚动浮现 */
+(function(){
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),
+    {threshold:.12,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+})();
+/* 卡片光标光晕 */
+document.querySelectorAll('.ann').forEach(card=>card.addEventListener('mousemove',e=>{
+  const r=card.getBoundingClientRect();
+  card.style.setProperty('--mx',(e.clientX-r.left)+'px');
+  card.style.setProperty('--my',(e.clientY-r.top)+'px');
+}));
+</script>
+</body>
+</html>
