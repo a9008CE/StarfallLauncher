@@ -238,6 +238,17 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         Loaded -= MainWindow_Loaded;
+
+        // 老版本更新器会留下 <exe>.bak；新版启动成功后清掉，避免用户误以为“下载下来的是 bak”
+        try
+        {
+            var backup = Environment.ProcessPath + ".bak";
+            if (!string.IsNullOrEmpty(backup) && File.Exists(backup)) File.Delete(backup);
+        }
+        catch
+        {
+        }
+
         if (App.Settings.Data.RunAsUpdateServer)
         {
             try

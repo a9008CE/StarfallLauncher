@@ -25,8 +25,10 @@ public sealed class UpdateAnnouncement
 /// </summary>
 public static class UpdateService
 {
-    public const string CurrentVersion = "1.0.4";
-    public static string DisplayVersion => "星落 LaunCher 1.0.4";
+    // 版本号从程序集读取（csproj 的 Version），避免发版时忘记同步
+    public static readonly string CurrentVersion =
+        typeof(UpdateService).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+    public static string DisplayVersion => $"星落 LaunCher {CurrentVersion}";
 
     public static UpdateAnnouncement LoadAnnouncement()
     {
@@ -47,7 +49,7 @@ public static class UpdateService
         return new UpdateAnnouncement
         {
             Version = CurrentVersion,
-            Notes = "星落 LaunCher 1.0.3"
+            Notes = $"星落 LaunCher {CurrentVersion}\n\n本次更新暂无详细说明。"
         };
     }
 
