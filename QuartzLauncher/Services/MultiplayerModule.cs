@@ -111,7 +111,8 @@ public sealed class RelayClient : IDisposable
 
     public Task<bool> CreateRoomAsync(string motd, string mc, string kind, string loader,
         int modCount, string password, int maxPlayers = 10,
-        IReadOnlyList<LocalModEntry>? mods = null, string owner = "", CancellationToken cancellationToken = default)
+        IReadOnlyList<LocalModEntry>? mods = null, string owner = "", string ownerCode = "",
+        CancellationToken cancellationToken = default)
         => Task.FromResult(false);
 
     public void Close()

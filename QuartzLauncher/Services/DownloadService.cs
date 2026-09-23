@@ -24,9 +24,9 @@ public static class DownloadService
     private const string BmclapiMirror = "https://bmclapi2.bangbang93.com";
     private const string CurseForgeMirror = "https://mod.mcimirror.top";
     private const string AdoptiumMirror = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium";
-    private const long ParallelDownloadThreshold = 4 * 1024 * 1024;
-    private const int MaxFileSegments = 4;
-    private static readonly TimeSpan DownloadInactivityTimeout = TimeSpan.FromSeconds(30);
+    private const long ParallelDownloadThreshold = 2 * 1024 * 1024;
+    private const int MaxFileSegments = 8;
+    private static readonly TimeSpan DownloadInactivityTimeout = TimeSpan.FromSeconds(25);
     private static readonly TimeSpan MirrorFailureCooldown = TimeSpan.FromMinutes(1);
     private static long _mirrorUnavailableUntilUtcTicks;
 
@@ -176,7 +176,9 @@ public static class DownloadService
     {
         if (workers <= 1 || item.Size < ParallelDownloadThreshold)
             return 1;
-        return Math.Clamp(Math.Min(workers, (int)Math.Ceiling(item.Size / (16d * 1024 * 1024))), 2, MaxFileSegments);
+        // 分片要“小”：BMCLAPI 的 302 签名地址只有 60 秒有效期，
+        // 大文件切大段容易下载到一半地址过期 → 卡住重试，反而更慢
+        return Math.Clamp((int)Math.Ceiling(item.Size / (5d * 1024 * 1024)), 2, MaxFileSegments);
     }
 
     public static async Task<string> DownloadOneAsync(DownloadItem item, Action<string, int, int>? progress = null,
@@ -405,7 +407,33 @@ public static class DownloadService
         (long Start, long End) range, long[] lengths, Action<string, int, int>? progress, CancellationToken ct)
     {
         var part = Path.Combine(segmentDir, index.ToString("D2") + ".part");
+        Exception? lastError = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (ct.IsCancellationRequested) ct.ThrowIfCancellationRequested();
+            try
+            {
+                await DownloadSegmentOnceAsync(item, url, part, index, range, lengths, progress, ct);
+                return;
+            }
+            catch (RangeNotSupportedException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // 单片卡住/断流：只重发这一片的请求（会重新解析 302 拿到新的签名地址），
+                // 已下好的部分继续续传，不让整个文件推倒重来
+                lastError = ex;
+                await Task.Delay(400 * (attempt + 1), ct);
+            }
+        }
+        throw new IOException($"下载分段 {index + 1} 重试失败：{lastError?.Message}", lastError);
+    }
 
+    private static async Task DownloadSegmentOnceAsync(DownloadItem item, string url, string part, int index,
+        (long Start, long End) range, long[] lengths, Action<string, int, int>? progress, CancellationToken ct)
+    {
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Range = new RangeHeaderValue(range.Start + lengths[index], range.End);
         using var inactivity = CreateInactivityTokenSource(ct);
@@ -434,7 +462,7 @@ public static class DownloadService
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                throw new IOException($"下载分段 {index + 1} 超过 30 秒没有数据，正在重试。");
+                throw new IOException($"下载分段 {index + 1} 超过 {DownloadInactivityTimeout.TotalSeconds:0} 秒没有数据，正在重试。");
             }
             if (read <= 0) break;
             inactivity.CancelAfter(DownloadInactivityTimeout);

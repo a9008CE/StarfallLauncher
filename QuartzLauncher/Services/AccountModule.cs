@@ -12,7 +12,7 @@ using System.Windows.Media.Imaging;
 namespace QuartzLauncher.Services;
 
 /// <summary>好友（按永久编码建立关系，名字是对方当前游戏 ID）。</summary>
-public sealed record AccountFriend(string Code, string Name, bool Online);
+public sealed record AccountFriend(string Code, string Name, bool Online, string Room = "", bool RoomLocked = false);
 
 /// <summary>一条聊天消息。</summary>
 public sealed record ChatMessage(string Channel, string From, string Text, long Timestamp, bool Filtered,
@@ -121,10 +121,10 @@ public sealed class AccountService
 
     public Task<bool> RefreshFriendsAsync() => Task.FromResult(false);
 
-    public Task<string?> RegisterAsync(string password, string name)
+    public Task<string?> RegisterAsync(string email, string password, string name)
         => Task.FromResult<string?>("联机模块不包含在开源内容中");
 
-    public Task<string?> LoginAsync(string code, string password, string name)
+    public Task<string?> LoginAsync(string identifier, string password, string name)
         => Task.FromResult<string?>("联机模块不包含在开源内容中");
 
     public Task<bool> TryRestoreAsync(string name) => Task.FromResult(false);
@@ -169,9 +169,10 @@ public static class DirectMessageStore
 
 public static class AccountDialogs
 {
-    public sealed record LoginInput(string Code, string Password);
+    public sealed record LoginInput(string Identifier, string Password);
+    public sealed record RegisterInput(string Email, string Password);
 
-    public static string? ShowRegister(System.Windows.Window? owner, string playerName) => null;
+    public static RegisterInput? ShowRegister(System.Windows.Window? owner, string playerName) => null;
 
     public static LoginInput? ShowLogin(System.Windows.Window? owner, string playerName) => null;
 

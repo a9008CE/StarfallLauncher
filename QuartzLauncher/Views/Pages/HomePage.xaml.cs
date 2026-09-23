@@ -703,9 +703,11 @@ public partial class HomePage : Page
             var owner = App.Settings.Data.AuthMode == AuthModes.Offline
                 ? App.Settings.Data.PlayerName
                 : App.Settings.Data.AuthPlayerName;
+            // 带上账号编码：已登录时，好友列表会显示「好友的房间」并可一键加入
+            var ownerCode = AccountService.Current is { IsLoggedIn: true } account ? account.Code : "";
             var ok = await client.CreateRoomAsync(
                 info.Motd, mc, snapshot.Modded ? "modded" : "vanilla",
-                instance.Loader ?? "", mods.Count, password, 10, mods, owner);
+                instance.Loader ?? "", mods.Count, password, 10, mods, owner, ownerCode);
 
             if (ok)
                 AppendLog($"[INFO] 房间已发布：房间码 {client.RoomCode}，地址 {client.PublicHost}:{client.DataPort}"

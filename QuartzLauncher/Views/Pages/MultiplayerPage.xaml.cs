@@ -860,11 +860,11 @@ public partial class MultiplayerPage : Page
     {
         var account = AccountService.Ensure();
         _account = account;
-        var password = AccountDialogs.ShowRegister(Window.GetWindow(this), CurrentPlayerName());
-        if (password == null) return;
+        var input = AccountDialogs.ShowRegister(Window.GetWindow(this), CurrentPlayerName());
+        if (input == null) return;
 
         FriendStatusText.Text = "正在注册…";
-        var error = await account.RegisterAsync(password, CurrentPlayerName());
+        var error = await account.RegisterAsync(input.Email, input.Password, CurrentPlayerName());
         FriendStatusText.Text = error ?? $"注册成功，你的编码是 {account.Code}（请抄下来保存）";
         RenderFriendAccount();
         RenderFriends();
@@ -878,7 +878,7 @@ public partial class MultiplayerPage : Page
         if (input == null) return;
 
         FriendStatusText.Text = "正在登录…";
-        var error = await account.LoginAsync(input.Code, input.Password, CurrentPlayerName());
+        var error = await account.LoginAsync(input.Identifier, input.Password, CurrentPlayerName());
         FriendStatusText.Text = error ?? "登录成功，好友已同步";
         RenderFriendAccount();
         RenderFriends();
@@ -1371,8 +1371,43 @@ public partial class MultiplayerPage : Page
                 };
                 state.SetResourceReference(TextBlock.ForegroundProperty, online ? "SuccessBrush" : "TextMutedBrush");
                 info.Children.Add(state);
+
+                // 好友正在开房：显示房间号（加密房标注）
+                if (!string.IsNullOrWhiteSpace(friend.Room))
+                {
+                    var roomText = new TextBlock
+                    {
+                        Text = $"房间 {friend.Room}{(friend.RoomLocked ? "（加密）" : "")}",
+                        FontSize = 11.5,
+                        Margin = new Thickness(0, 3, 0, 0)
+                    };
+                    roomText.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryBrush");
+                    info.Children.Add(roomText);
+                }
                 Grid.SetColumn(info, 1);
                 row.Children.Add(info);
+
+                var buttons = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                if (!string.IsNullOrWhiteSpace(friend.Room))
+                {
+                    var joinBtn = new Button
+                    {
+                        Content = "加入房间",
+                        Height = 28,
+                        Padding = new Thickness(12, 2, 12, 2),
+                        Margin = new Thickness(0, 0, 8, 0),
+                        Cursor = System.Windows.Input.Cursors.Hand,
+                        VerticalAlignment = VerticalAlignment.Center
+                    };
+                    joinBtn.SetResourceReference(StyleProperty, "BtnPrimary");
+                    joinBtn.Click += async (_, _) => await JoinFriendRoomAsync(friend, joinBtn);
+                    buttons.Children.Add(joinBtn);
+                }
 
                 var removeBtn = new Button
                 {
@@ -1392,8 +1427,10 @@ public partial class MultiplayerPage : Page
                         RenderFriends();
                     }
                 };
-                Grid.SetColumn(removeBtn, 2);
-                row.Children.Add(removeBtn);
+                buttons.Children.Add(removeBtn);
+
+                Grid.SetColumn(buttons, 2);
+                row.Children.Add(buttons);
 
                 FriendList.Children.Add(row);
             }
@@ -1769,45 +1806,7 @@ public partial class MultiplayerPage : Page
         JoinHint.Text = "正在加入...";
         try
         {
-            var result = await _lobby.JoinAsync(room.Room, PasswordBox.Text.Trim());
-            if (!result.Ok)
-            {
-                JoinHint.Text = result.Message;
-                return;
-            }
-
-            if (!_lobby.StartProxy(result))
-            {
-                JoinHint.Text = "本地代理启动失败";
-                return;
-            }
-
-            // Mod 自动同步：与房主清单比对并下载缺失项
-            var syncText = "";
-            if (room.Mods.Count > 0)
-            {
-                var instance = (Window.GetWindow(this) as MainWindow)?.HomePage?.SelectedInstance;
-                var gameDir = instance != null
-                    ? InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance)
-                    : App.Paths.MinecraftDir;
-                var progress = new Progress<string>(text => JoinHint.Text = text);
-                syncText = await _lobby.SyncModsAsync(room.Mods, gameDir, result.Mc, result.Loader, progress);
-            }
-
-            // 一键启动并加入：公开房直接连中继地址；密码房走本地代理（令牌握手）
-            var target = room.ConnectAddress is { Length: > 0 }
-                ? room.ConnectAddress
-                : $"127.0.0.1:{_lobby.LocalPort}";
-
-            if (Window.GetWindow(this) is MainWindow mainWindow && mainWindow.StartQuickPlay())
-            {
-                QuickPlayRequest.Address = target;
-                JoinHint.Text = $"{(string.IsNullOrEmpty(syncText) ? "" : syncText + "；")}正在启动游戏并加入房主的世界…";
-            }
-            else
-            {
-                JoinHint.Text = "游戏正在启动中，请等启动完成后再点「加入房间」";
-            }
+            await StartJoinRoomAsync(room, PasswordBox.Text.Trim(), text => JoinHint.Text = text);
         }
         catch (Exception ex)
         {
@@ -1818,5 +1817,188 @@ public partial class MultiplayerPage : Page
             _joining = false;
             JoinBtn.IsEnabled = true;
         }
+    }
+
+    /// <summary>好友列表：一键加入好友正在开的房间（与联机大厅「加入房间」同一套流程）。</summary>
+    private async Task JoinFriendRoomAsync(AccountFriend friend, Button joinBtn)
+    {
+        if (_joining) return;
+
+        LobbyRoom? room;
+        try
+        {
+            var rooms = await _lobby.GetRoomsAsync();
+            room = rooms.FirstOrDefault(r => string.Equals(r.Room, friend.Room, StringComparison.OrdinalIgnoreCase));
+        }
+        catch
+        {
+            FriendStatusText.Text = "中继服务器不可达";
+            return;
+        }
+        if (room == null)
+        {
+            FriendStatusText.Text = "房间可能已关闭，稍后刷新再看";
+            return;
+        }
+
+        var password = "";
+        if (room.Locked)
+        {
+            var input = PromptRoomPassword(room.Room);
+            if (input == null) return;
+            password = input.Trim();
+            if (password.Length == 0) return;
+        }
+
+        _joining = true;
+        joinBtn.IsEnabled = false;
+        FriendStatusText.Text = $"正在加入房间 {room.Room}…";
+        try
+        {
+            await StartJoinRoomAsync(room, password, text => FriendStatusText.Text = text);
+        }
+        catch (Exception ex)
+        {
+            FriendStatusText.Text = "加入失败：" + ex.Message;
+        }
+        finally
+        {
+            _joining = false;
+            joinBtn.IsEnabled = true;
+        }
+    }
+
+    /// <summary>加入房间的共用流程：中继握手 → 本地代理 → Mod 同步 → 一键启动并加入。</summary>
+    private async Task StartJoinRoomAsync(LobbyRoom room, string password, Action<string> setStatus)
+    {
+        var result = await _lobby.JoinAsync(room.Room, password);
+        if (!result.Ok)
+        {
+            setStatus(result.Message);
+            return;
+        }
+
+        if (!_lobby.StartProxy(result))
+        {
+            setStatus("本地代理启动失败");
+            return;
+        }
+
+        // Mod 自动同步：与房主清单比对并下载缺失项
+        var syncText = "";
+        if (room.Mods.Count > 0)
+        {
+            var instance = (Window.GetWindow(this) as MainWindow)?.HomePage?.SelectedInstance;
+            var gameDir = instance != null
+                ? InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance)
+                : App.Paths.MinecraftDir;
+            var progress = new Progress<string>(text => setStatus(text));
+            syncText = await _lobby.SyncModsAsync(room.Mods, gameDir, result.Mc, result.Loader, progress);
+        }
+
+        // 一键启动并加入：公开房直接连中继地址；密码房走本地代理（令牌握手）
+        var target = room.ConnectAddress is { Length: > 0 }
+            ? room.ConnectAddress
+            : $"127.0.0.1:{_lobby.LocalPort}";
+
+        if (Window.GetWindow(this) is MainWindow mainWindow && mainWindow.StartQuickPlay())
+        {
+            QuickPlayRequest.Address = target;
+            setStatus($"{(string.IsNullOrEmpty(syncText) ? "" : syncText + "；")}正在启动游戏并加入房主的世界…");
+        }
+        else
+        {
+            setStatus("游戏正在启动中，请等启动完成后再点「加入房间」");
+        }
+    }
+
+    /// <summary>密码房：弹窗输入联机密码（取消返回 null）。</summary>
+    private string? PromptRoomPassword(string roomCode)
+    {
+        var owner = Window.GetWindow(this);
+        var window = new Window
+        {
+            Title = "联机密码",
+            Width = 320,
+            SizeToContent = SizeToContent.Height,
+            WindowStyle = WindowStyle.None,
+            ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false,
+            Topmost = true,
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            WindowStartupLocation = owner == null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
+            Owner = owner
+        };
+
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(20, 18, 20, 18)
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "DialogCardBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+
+        var panel = new StackPanel();
+        var title = new TextBlock
+        {
+            Text = $"房间 {roomCode} 需要联机密码",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold
+        };
+        title.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        panel.Children.Add(title);
+
+        var box = new PasswordBox
+        {
+            Height = 34,
+            Margin = new Thickness(0, 12, 0, 14),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        panel.Children.Add(box);
+
+        string? result = null;
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        var cancel = new Button { Content = "取消", Height = 30, Padding = new Thickness(14, 2, 14, 2) };
+        cancel.SetResourceReference(StyleProperty, "BtnBase");
+        cancel.Click += (_, _) => window.Close();
+
+        var ok = new Button
+        {
+            Content = "加入",
+            Height = 30,
+            Padding = new Thickness(16, 2, 16, 2),
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+        ok.SetResourceReference(StyleProperty, "BtnPrimary");
+
+        void Submit()
+        {
+            result = box.Password;
+            window.Close();
+        }
+
+        ok.Click += (_, _) => Submit();
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Enter) return;
+            e.Handled = true;
+            Submit();
+        };
+
+        buttons.Children.Add(cancel);
+        buttons.Children.Add(ok);
+        panel.Children.Add(buttons);
+
+        card.Child = panel;
+        window.Content = card;
+        box.Loaded += (_, _) => box.Focus();
+        window.ShowDialog();
+        return result;
     }
 }
