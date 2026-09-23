@@ -1,4 +1,4 @@
-﻿# ===== 构建输出 =====
+# ===== 构建输出 =====
 [Bb]in/
 [Oo]bj/
 dist/
@@ -9,6 +9,9 @@ dist/
 Launcher/
 .minecraft/
 *.log
+
+# ===== 官网（不参与开源）=====
+website/
 
 # ===== IDE / 系统 =====
 .vs/
