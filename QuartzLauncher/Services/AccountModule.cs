@@ -134,6 +134,85 @@ public sealed class AccountService
 
     public Task<bool> SendDirectAsync(string targetCode, string text, string kind = "text", string quote = "")
         => Task.FromResult(false);
+
+    // ===== IM 核心（开源版不含实现，只有空壳供界面编译通过）=====
+
+    public ImClient? Im => null;
+
+    public event Action<ImMessage>? ImMessageReceived;
+    public event Action<ImMessage>? ImMessageAcked;
+    public event Action<string>? ImError;
+    public event Action<IReadOnlyList<ImConversation>>? ImConversationsChanged;
+    public event Action<string, string>? ImMessageRecalled;
+    public event Action<string>? ImReadReceived;
+    public event Action<string, IReadOnlyList<ImMessage>>? ImHistoryLoaded;
+
+    public Task<bool> SendImAsync(string peerCode, string text) => Task.FromResult(false);
+
+    public Task<bool> SendImAsync(string peerCode, string text, string kind) => Task.FromResult(false);
+
+    public Task<bool> RecallImAsync(string conv, string messageId) => Task.FromResult(false);
+
+    public Task<bool> LoadImHistoryAsync(string peerCode, int limit = 50) => Task.FromResult(false);
+
+    public Task<bool> MarkImReadAsync(string conv) => Task.FromResult(false);
+
+    public Task<bool> RefreshImConversationsAsync() => Task.FromResult(false);
+
+    public IReadOnlyList<ImMessage> GetImMessages(string peerCode) => Array.Empty<ImMessage>();
+}
+
+/// <summary>一条 IM 消息（开源版只保留形状，界面需要它渲染气泡）。</summary>
+public sealed record ImMessage(
+    string Id,
+    string Conv,
+    string From,
+    string To,
+    string Text,
+    long Timestamp,
+    bool Recalled = false,
+    string Kind = "text")
+{
+    public DateTimeOffset Time => DateTimeOffset.FromUnixTimeMilliseconds(Timestamp);
+    public string TimeText => Time.ToLocalTime().ToString("HH:mm");
+    public bool IsImage => Kind == "image";
+
+    public bool CanRecall(string myCode) => false;
+}
+
+/// <summary>一个会话摘要。</summary>
+public sealed record ImConversation(
+    string Conv,
+    string Peer,
+    bool Blocked,
+    string LastMessage,
+    long LastTimestamp,
+    int Unread = 0)
+{
+    public string TimeText => LastTimestamp <= 0
+        ? ""
+        : DateTimeOffset.FromUnixTimeMilliseconds(LastTimestamp).ToLocalTime().ToString("MM-dd HH:mm");
+}
+
+/// <summary>IM 连接（开源版不提供实现，界面仍需引用它的会话 ID 算法）。</summary>
+public sealed class ImClient
+{
+    public bool IsConnected => false;
+
+    public static string ConvId(string a, string b)
+    {
+        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b) || a == b) return "";
+        var (lo, hi) = string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
+        return $"dm:{lo}_{hi}";
+    }
+}
+
+/// <summary>BBCode 表情解析（开源版不提供完整表情表，原样返回）。</summary>
+public static class ImEmoji
+{
+    public static string Parse(string text) => text ?? "";
+    public static IReadOnlyList<string> AllTags { get; } = Array.Empty<string>();
+    public static string Preview(string tag) => tag;
 }
 
 /// <summary>本地好友备注（旧版按名字的好友列表）。</summary>

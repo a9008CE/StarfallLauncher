@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -112,10 +112,13 @@ public partial class MultiplayerPage : Page
         ChatView.Visibility = ReferenceEquals(view, ChatView) ? Visibility.Visible : Visibility.Collapsed;
         MyRoomsView.Visibility = ReferenceEquals(view, MyRoomsView) ? Visibility.Visible : Visibility.Collapsed;
         FriendsView.Visibility = ReferenceEquals(view, FriendsView) ? Visibility.Visible : Visibility.Collapsed;
-        PrivateChatView.Visibility = ReferenceEquals(view, PrivateChatView) ? Visibility.Visible : Visibility.Collapsed;
+        ImListView.Visibility = ReferenceEquals(view, ImListView) ? Visibility.Visible : Visibility.Collapsed;
+        ImChatView.Visibility = ReferenceEquals(view, ImChatView) ? Visibility.Visible : Visibility.Collapsed;
 
         if (ReferenceEquals(view, ChatView))
             ChatScroll.ScrollToEnd();
+        if (ReferenceEquals(view, ImChatView))
+            ImChatScroll.ScrollToEnd();
     }
 
     private async Task EnsureChatAsync()
@@ -205,7 +208,6 @@ public partial class MultiplayerPage : Page
     /// <summary>待发送的引用（双击气泡设置，发送后清空）</summary>
     private string _quoteText = "";
     private bool _sendingChat;
-    private bool _sendingPrivate;
     private readonly List<ChatMessage> _chatHistory = new();
 
     /// <summary>发送成功后清掉引用与提示（状态栏写明「发送后自动清除」）。</summary>
@@ -214,7 +216,6 @@ public partial class MultiplayerPage : Page
         if (_quoteText.Length == 0) return;
         _quoteText = "";
         ChatStatus.Text = "";
-        PrivateChatStatus.Text = "";
     }
 
     private void AppendChatMessage(ChatMessage message)
@@ -334,7 +335,6 @@ public partial class MultiplayerPage : Page
             var label = message.Text.Length > 40 ? message.Text[..40] + "…" : message.Text;
             _quoteText = $"{message.From}：{label}";
             ChatStatus.Text = "[引用] " + _quoteText + "（发送后自动清除，双击其它气泡可替换）";
-            PrivateChatStatus.Text = ChatStatus.Text;
         };
 
         // QQ 风格小尖角：指向头像一侧，颜色和气泡一致
@@ -504,7 +504,7 @@ public partial class MultiplayerPage : Page
             chat.Click += (_, _) =>
             {
                 window.Close();
-                OpenPrivateChat(code, name);
+                OpenFriendChat(code, name);
             };
             actions.Children.Add(chat);
         }
@@ -945,48 +945,617 @@ public partial class MultiplayerPage : Page
         RenderFriends();
     }
 
-    // ===== 私聊（点好友进入）=====
+    // ===== IM 核心（好友单聊 / 离线消息 / 撤回 / BBCode 表情）=====
 
-    private string _dmCode = "";
-    private string _dmName = "";
-    private readonly Dictionary<string, List<ChatMessage>> _dmLogs = new(StringComparer.OrdinalIgnoreCase);
+    private string _imPeer = "";
+    private string _imPeerName = "";
+    private readonly List<ImMessage> _imLog = new();
+    private bool _sendingIm;
+    private int _lastPendingImUnread = -1;
 
-    /// <summary>取某位好友的私聊记录（没有就建一个）。</summary>
-    private List<ChatMessage> LogOf(string key)
+    /// <summary>按好友编码记录的 IM 未读数（与旧私聊的红点分开算，避免重复计数）。</summary>
+    private readonly System.Collections.Generic.Dictionary<string, int> _imUnreadByPeer
+        = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>IM 相关事件只订阅一次。</summary>
+    private bool _imWired;
+
+    private void WireIm()
     {
-        key = string.IsNullOrWhiteSpace(key) ? "unknown" : key;
-        if (!_dmLogs.TryGetValue(key, out var list))
+        var account = _account;
+        if (account == null || _imWired) return;
+        _imWired = true;
+
+        account.ImMessageReceived += message => Dispatcher.BeginInvoke(() => OnImMessage(message));
+        account.ImMessageAcked += message => Dispatcher.BeginInvoke(() => OnImAcked(message));
+        account.ImConversationsChanged += list => Dispatcher.BeginInvoke(() => RenderImSessions(list));
+        account.ImMessageRecalled += (conv, id) => Dispatcher.BeginInvoke(() => OnImRecalled(conv, id));
+        account.ImHistoryLoaded += (conv, messages) => Dispatcher.BeginInvoke(() => OnImHistory(conv, messages));
+        account.ImError += text => Dispatcher.BeginInvoke(() =>
         {
-            list = new List<ChatMessage>();
-            _dmLogs[key] = list;
-        }
-        return list;
+            // 报错时把没发出去的话还给用户，别让人以为自己发出去了
+            if (_sendingIm && ImInput.Text.Length == 0) ImInput.Text = _imFailedText;
+            ImChatStatus.Text = text;
+        });
     }
+
+    /// <summary>历史载入：只填当前打开的会话，不触发通知（否则一开窗口就响一串提示音）。</summary>
+    private void OnImHistory(string conv, IReadOnlyList<ImMessage> messages)
+    {
+        if (ImChatView.Visibility != Visibility.Visible) return;
+        if (!string.Equals(conv, ImClient.ConvId(_account?.Code ?? "", _imPeer), StringComparison.Ordinal)) return;
+
+        _imLog.Clear();
+        _imLog.AddRange(messages.Where(m => !m.Recalled || m.From == _account?.Code));
+        while (_imLog.Count > 300) _imLog.RemoveAt(0);
+        RenderImChat();
+        ImChatStatus.Text = messages.Count > 0
+            ? $"已载入最近 {messages.Count} 条（记录保存在服务器，重装启动器也还在）"
+            : "还没有聊天记录";
+    }
+
+    /// <summary>好友页的「IM 消息」入口。</summary>
+    private void ImEntry_Click(object sender, RoutedEventArgs e)
+    {
+        var account = _account;
+        if (account == null || !account.IsLoggedIn)
+        {
+            if (FriendsView.Visibility == Visibility.Visible) FriendStatusText.Text = "请先登录账号再使用 IM";
+            return;
+        }
+
+        WireIm();
+        _imLog.Clear();
+        ShowView(ImListView);
+        ImListStatus.Text = "正在拉取会话…";
+        _ = account.RefreshImConversationsAsync();
+    }
+
+    private void ImListBack_Click(object sender, RoutedEventArgs e) => ShowView(FriendsView);
+
+    private async void ImRefresh_Click(object sender, RoutedEventArgs e)
+    {
+        ImListStatus.Text = "正在拉取会话…";
+        if (_account == null || !await _account.RefreshImConversationsAsync())
+            ImListStatus.Text = "连接不可用，请稍后再试";
+    }
+
+    /// <summary>重画会话列表：对方名字 + 最后一条 + 未读红点。</summary>
+    private void RenderImSessions(IReadOnlyList<ImConversation> sessions)
+    {
+        ImSessionList.Children.Clear();
+        if (sessions.Count == 0)
+        {
+            var empty = new TextBlock
+            {
+                Text = "还没有聊天记录。和好友聊一句就会出现在这里。",
+                FontSize = 12,
+                Margin = new Thickness(8, 20, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+            empty.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            ImSessionList.Children.Add(empty);
+            ImListStatus.Text = "只支持和好友聊天；对方不在线时消息会留在服务器，上线自动补发。";
+            return;
+        }
+
+        var pending = sessions.Sum(s => s.Unread);
+        if (pending != _lastPendingImUnread)
+        {
+            _lastPendingImUnread = pending;
+            SyncImUnread(sessions);
+        }
+
+        foreach (var session in sessions)
+        {
+            ImSessionList.Children.Add(BuildImSessionRow(session));
+        }
+
+        ImListStatus.Text = $"共 {sessions.Count} 个会话"
+                           + (_account?.Im is { IsConnected: true } ? " · 已连接" : " · 未连接，发送会自动重试");
+    }
+
+    /// <summary>服务端给的未读数是权威值，同步到红点。</summary>
+    private void SyncImUnread(IReadOnlyList<ImConversation> sessions)
+    {
+        _imUnreadByPeer.Clear();
+        foreach (var session in sessions)
+        {
+            if (session.Unread > 0) _imUnreadByPeer[session.Peer] = session.Unread;
+        }
+        RecomputeUnread();
+    }
+
+    private UIElement BuildImSessionRow(ImConversation session)
+    {
+        var myCode = _account?.Code ?? "";
+        var name = FriendNameOf(session.Peer);
+
+        var row = new Border
+        {
+            Padding = new Thickness(12, 10, 12, 10),
+            Margin = new Thickness(0, 0, 0, 6),
+            CornerRadius = new CornerRadius(8),
+            Cursor = System.Windows.Input.Cursors.Hand
+        };
+        row.SetResourceReference(Border.BackgroundProperty, "DialogCardBrush");
+        row.MouseLeftButtonUp += (_, _) => OpenImChat(session.Peer, name);
+
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var left = new StackPanel();
+        left.Children.Add(new TextBlock
+        {
+            Text = string.IsNullOrEmpty(name) ? session.Peer : name,
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold
+        });
+
+        var preview = new TextBlock
+        {
+            Text = string.IsNullOrEmpty(session.LastMessage)
+                ? (session.Blocked ? "已解除好友关系" : "暂无消息")
+                : ImEmoji.Parse(session.LastMessage),
+            FontSize = 11,
+            Margin = new Thickness(0, 3, 0, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 360
+        };
+        preview.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+        left.Children.Add(preview);
+        Grid.SetColumn(left, 0);
+        grid.Children.Add(left);
+
+        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
+        var time = new TextBlock { Text = session.TimeText, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Right };
+        time.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+        right.Children.Add(time);
+
+        if (session.Unread > 0)
+        {
+            var badge = new Border
+            {
+                CornerRadius = new CornerRadius(9),
+                Padding = new Thickness(6, 1, 6, 1),
+                Margin = new Thickness(0, 4, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Background = (Brush)FindResource("DangerBrush"),
+                Child = new TextBlock
+                {
+                    Text = session.Unread > 99 ? "99+" : session.Unread.ToString(),
+                    FontSize = 10,
+                    Foreground = Brushes.White
+                }
+            };
+            right.Children.Add(badge);
+        }
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
+
+        row.Child = grid;
+        return row;
+    }
+
+    /// <summary>按编码在好友列表里查名字（查不到就显示编码本身）。</summary>
+    private string FriendNameOf(string code)
+    {
+        var friend = _account?.Friends.FirstOrDefault(f =>
+            string.Equals(f.Code, code, StringComparison.OrdinalIgnoreCase));
+        return friend?.Name ?? "";
+    }
+
+    /// <summary>
+    /// 从好友列表或用户卡片点进来：统一走 IM 核心。
+    /// 没登录时给明确提示（IM 必须是好友制，登录态拿不到就没法发）。
+    /// </summary>
+    private void OpenFriendChat(string code, string name)
+    {
+        var account = _account;
+        if (account == null || !account.IsLoggedIn)
+        {
+            if (FriendsView.Visibility == Visibility.Visible)
+                FriendStatusText.Text = "请先登录账号再聊天";
+            return;
+        }
+
+        var isFriend = account.Friends.Any(f => string.Equals(f.Code, code, StringComparison.OrdinalIgnoreCase));
+        if (!isFriend)
+        {
+            if (FriendsView.Visibility == Visibility.Visible)
+                FriendStatusText.Text = "只能和好友聊天（IM 禁止陌生人私聊）";
+            return;
+        }
+
+        WireIm();
+        OpenImChat(code, name);
+    }
+
+    private void OpenImChat(string code, string name)    {
+        var account = _account;
+        if (account == null) return;
+
+        _imPeer = code;
+        _imPeerName = string.IsNullOrWhiteSpace(name) ? code : name;
+        ImChatTitle.Text = _imPeerName;
+        ImChatPeer.Text = code == _imPeerName ? "" : code;
+        ImChatStatus.Text = "正在加载聊天记录…";
+
+        ShowView(ImChatView);
+        RenderImChat();
+
+        _ = account.LoadImHistoryAsync(code, 50);
+
+        // 打开就算已读：服务端落盘，重连不会重复补发
+        var conv = ImClient.ConvId(account.Code, code);
+        _ = account.MarkImReadAsync(conv);
+        if (_imUnreadByPeer.Remove(code)) RecomputeUnread();
+    }
+
+    private void RenderImChat()
+    {
+        ImChatMessages.Children.Clear();
+        for (var i = 0; i < _imLog.Count; i++)
+        {
+            var showHeader = i == 0 || _imLog[i].From != _imLog[i - 1].From
+                             || _imLog[i].Timestamp - _imLog[i - 1].Timestamp > 5 * 60 * 1000;
+            if (showHeader) ImChatMessages.Children.Add(BuildTimeDivider(_imLog[i].Timestamp));
+            ImChatMessages.Children.Add(BuildImRow(_imLog[i]));
+        }
+        ImChatScroll.ScrollToEnd();
+    }
+
+    private UIElement BuildImRow(ImMessage message)
+    {
+        var myCode = _account?.Code ?? "";
+        var isMine = string.Equals(message.From, myCode, StringComparison.Ordinal);
+
+        var mineBubble = new SolidColorBrush(Color.FromRgb(0x9C, 0xDD, 0xFF));
+        mineBubble.Freeze();
+
+        var line = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = isMine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+
+        var bubble = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(14, 9, 14, 9),
+            MaxWidth = 520,
+            Background = isMine ? mineBubble : (Brush)FindResource("DialogCardBrush")
+        };
+
+        var content = new StackPanel();
+
+        if (message.Recalled)
+        {
+            var tip = new TextBlock { Text = isMine ? "你撤回了一条消息" : "对方撤回了一条消息", FontSize = 12, Opacity = 0.7 };
+            tip.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            bubble.Child = tip;
+            line.Children.Add(bubble);
+            return line;
+        }
+
+        if (!isMine)
+        {
+            var header = new TextBlock
+            {
+                Text = $"{_imPeerName} · {message.TimeText}",
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 0, 3)
+            };
+            header.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            content.Children.Add(header);
+        }
+
+        var body = message.IsImage ? BuildImImage(message.Text, isMine) : BuildImText(message.Text, isMine);
+        if (body != null) content.Children.Add(body);
+
+        if (isMine)
+        {
+            var time = new TextBlock
+            {
+                Text = message.TimeText,
+                FontSize = 10,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Opacity = 0.7,
+                Margin = new Thickness(0, 3, 0, 0)
+            };
+            time.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            content.Children.Add(time);
+        }
+
+        bubble.Child = content;
+
+        // 右键：撤回（仅限自己 5 分钟内发的）/ 复制
+        var menu = new ContextMenu();
+        var copy = new MenuItem { Header = "复制" };
+        copy.Click += (_, _) => TryCopy(message.Text);
+        menu.Items.Add(copy);
+        if (message.CanRecall(myCode))
+        {
+            var recall = new MenuItem { Header = "撤回" };
+            recall.Click += async (_, _) =>
+            {
+                var account = _account;
+                if (account == null) return;
+                ImChatStatus.Text = "正在撤回…";
+                if (await account.RecallImAsync(message.Conv, message.Id))
+                    ImChatStatus.Text = "已撤回";
+                else
+                    ImChatStatus.Text = "撤回失败：超过 5 分钟就不能撤回了";
+            };
+            menu.Items.Add(recall);
+        }
+        bubble.ContextMenu = menu;
+        bubble.MouseRightButtonUp += (_, args) => args.Handled = true;
+
+        line.Children.Add(bubble);
+        return line;
+    }
+
+    private UIElement BuildImText(string text, bool isMine)
+    {
+        var body = new TextBlock
+        {
+            Text = ImEmoji.Parse(text),
+            FontSize = 15,
+            TextWrapping = TextWrapping.Wrap,
+            LineHeight = 24
+        };
+        if (isMine) body.Foreground = new SolidColorBrush(Color.FromRgb(0x10, 0x2A, 0x3A));
+        else body.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+        return body;
+    }
+
+    /// <summary>渲染 IM 图片消息。服务端存的是 data URL，这里剥掉前缀后复用老私聊的解码逻辑。</summary>
+    private UIElement? BuildImImage(string dataUrl, bool isMine)
+    {
+        var comma = dataUrl.IndexOf(',');
+        var base64 = comma >= 0 ? dataUrl[(comma + 1)..] : dataUrl;
+        var image = BuildChatImage(base64);
+        if (image == null)
+            return new TextBlock { Text = $"（图片无法显示：{base64.Length} 字符）", FontSize = 11 };
+        if (isMine && image is FrameworkElement element) element.HorizontalAlignment = HorizontalAlignment.Right;
+        return image;
+    }
+
+    private void TryCopy(string text)
+    {
+        try
+        {
+            Clipboard.SetText(ImEmoji.Parse(text));
+            ImChatStatus.Text = "已复制到剪贴板";
+        }
+        catch
+        {
+            ImChatStatus.Text = "复制失败";
+        }
+    }
+
+    /// <summary>收到 IM 消息：正在看的会话直接上屏，否则红点 + 提示音。</summary>
+    private void OnImMessage(ImMessage message)
+    {
+        var account = _account;
+        if (account == null) return;
+
+        var peer = string.Equals(message.From, account.Code, StringComparison.Ordinal)
+            ? message.To
+            : message.From;
+        if (string.IsNullOrEmpty(peer)) return;
+        var conv = ImClient.ConvId(account.Code, peer);
+
+        if (ImChatView.Visibility == Visibility.Visible
+            && string.Equals(_imPeer, peer, StringComparison.OrdinalIgnoreCase))
+        {
+            if (_imLog.Any(existing => string.Equals(existing.Id, message.Id, StringComparison.Ordinal))) return;
+            _imLog.Add(message);
+            while (_imLog.Count > 300) _imLog.RemoveAt(0);
+            RenderImChat();
+            _ = account.MarkImReadAsync(conv);
+            if (_imUnreadByPeer.Remove(peer)) RecomputeUnread();
+            return;
+        }
+
+        // 不在当前会话：未读数交给服务端算，这里只要刷新列表 + 提醒
+        _ = account.RefreshImConversationsAsync();
+        PlayNotifySound();
+    }
+
+    /// <summary>
+    /// 自己发出的消息被服务端确认：补上最终 ID 和时间戳后上屏。
+    /// 服务端不会把消息回推给发送方，所以这一步是「自己也能看到自己发的」的唯一来源。
+    /// </summary>
+    private void OnImAcked(ImMessage message)
+    {
+        var peer = message.To;
+        if (string.IsNullOrEmpty(peer)) return;
+
+        if (ImChatView.Visibility == Visibility.Visible
+            && string.Equals(_imPeer, peer, StringComparison.OrdinalIgnoreCase)
+            && !_imLog.Any(existing => string.Equals(existing.Id, message.Id, StringComparison.Ordinal)))
+        {
+            _imLog.Add(message);
+            while (_imLog.Count > 300) _imLog.RemoveAt(0);
+            RenderImChat();
+        }
+
+        // 摘要（最后一条 + 时间）变了，会话列表要跟着动
+        _ = _account?.RefreshImConversationsAsync();
+    }
+
+    private void OnImRecalled(string conv, string id)    {
+        var index = _imLog.FindIndex(m => string.Equals(m.Id, id, StringComparison.Ordinal));
+        if (index < 0) return;
+        _imLog[index] = _imLog[index] with { Recalled = true };
+        if (ImChatView.Visibility == Visibility.Visible) RenderImChat();
+    }
+
+    private string _imFailedText = "";
+
+    private async void ImSend_Click(object sender, RoutedEventArgs e) => await SendImAsync();
+
+    private async void ImInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter && e.KeyboardDevice.Modifiers == System.Windows.Input.ModifierKeys.Shift)
+        {
+            e.Handled = true;
+            return;
+        }
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        e.Handled = true;
+        await SendImAsync();
+    }
+
+    private async Task SendImAsync()
+    {
+        var account = _account;
+        if (account == null) return;
+
+        var text = ImInput.Text?.Trim() ?? "";
+        if (text.Length == 0) return;
+        if (string.IsNullOrEmpty(_imPeer))
+        {
+            ImChatStatus.Text = "还没选好友";
+            return;
+        }
+
+        ImInput.Text = "";
+        _imFailedText = text;
+        _sendingIm = true;
+        var ok = await account.SendImAsync(_imPeer, text);
+        _sendingIm = false;
+        if (ok) ImChatStatus.Text = "";
+        else ImChatStatus.Text = "发送失败，请检查网络后重试";
+    }
+
+    private async void ImImage_Click(object sender, RoutedEventArgs e)
+    {
+        var account = _account;
+        if (account == null || !account.IsLoggedIn)
+        {
+            ImChatStatus.Text = "请先注册或登录账号";
+            return;
+        }
+        if (string.IsNullOrEmpty(_imPeer))
+        {
+            ImChatStatus.Text = "还没选好友";
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择要发送的图片",
+            Filter = "图片 (*.png;*.jpg;*.jpeg;*.gif;*.webp)|*.png;*.jpg;*.jpeg;*.gif;*.webp"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        if (new System.IO.FileInfo(dialog.FileName).Length > 1024 * 1024)
+        {
+            ImChatStatus.Text = "图片太大（上限 1MB）";
+            return;
+        }
+
+        try
+        {
+            ImChatStatus.Text = "正在发送图片…";
+            var bytes = await System.IO.File.ReadAllBytesAsync(dialog.FileName);
+            var mime = ImageMimeOf(dialog.FileName);
+            var dataUrl = $"data:{mime};base64," + Convert.ToBase64String(bytes);
+            if (await account.SendImAsync(_imPeer, dataUrl, "image"))
+                ImChatStatus.Text = "图片已发送";
+            else
+                ImChatStatus.Text = "图片发送失败，请稍后再试";
+        }
+        catch (Exception ex)
+        {
+            ImChatStatus.Text = "图片发送失败：" + ex.Message;
+        }
+    }
+
+    private static string ImageMimeOf(string path) =>
+        System.IO.Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "image/png"
+        };
+
+    private void ImEmoji_Click(object sender, RoutedEventArgs e)
+    {
+        if (ImEmojiPopup.IsOpen)
+        {
+            ImEmojiPopup.IsOpen = false;
+            return;
+        }
+
+        ImEmojiItems.Items.Clear();
+        foreach (var tag in ImEmoji.AllTags.OrderBy(t => t, StringComparer.Ordinal))
+        {
+            var text = new TextBlock { Text = ImEmoji.Preview(tag), FontSize = 18, Margin = new Thickness(6, 3, 6, 3) };
+            var button = new Button
+            {
+                Content = text,
+                Style = TryFindResource("BtnBase") as Style,
+                Padding = new Thickness(6, 4, 6, 4),
+                Margin = new Thickness(2),
+                Tag = tag,
+                Cursor = System.Windows.Input.Cursors.Hand
+            };
+            button.Click += (_, _) =>
+            {
+                InsertImText("[" + (string)button.Tag + "]");
+                ImEmojiPopup.IsOpen = false;
+            };
+            ImEmojiItems.Items.Add(button);
+        }
+        ImEmojiPopup.IsOpen = true;
+    }
+
+    /// <summary>往输入框插入一段文字，并让光标停在它后面。</summary>
+    private void InsertImText(string text)
+    {
+        ImInput.Text += text;
+        ImInput.Focus();
+        ImInput.CaretIndex = ImInput.Text.Length;
+        ImInput.SelectionLength = 0;
+    }
+
+    private void ImChatBack_Click(object sender, RoutedEventArgs e)
+    {
+        _imPeer = "";
+        ShowView(ImListView);
+        _ = _account?.RefreshImConversationsAsync();
+    }
+
+    // ===== 未读红点 =====
 
     private static int _unreadTotal;
 
-    /// <summary>未读私聊数量变化（主窗口用它显示红点）。</summary>
+    /// <summary>未读总数变化（主窗口用它显示红点）。</summary>
     public static event Action<int>? UnreadChanged;
 
-    /// <summary>按好友编码记录的未读私聊数（点开谁的聊天只清谁的红点）</summary>
-    private readonly System.Collections.Generic.Dictionary<string, int> _unreadByPeer
-        = new(StringComparer.OrdinalIgnoreCase);
     private int _unreadFriendRequests;
     private int _lastPendingRequests = -1;
 
-    /// <summary>重算未读总数 = 新好友申请 + 未读私聊，并广播红点。</summary>
+    /// <summary>重算未读总数 = 新好友申请 + 未读 IM，并广播红点。</summary>
     private void RecomputeUnread()
     {
-        _unreadTotal = _unreadFriendRequests + _unreadByPeer.Values.Sum();
+        _unreadTotal = _unreadFriendRequests + _imUnreadByPeer.Values.Sum();
         UnreadChanged?.Invoke(_unreadTotal);
     }
 
-    private string DmChannel(string otherCode)
+    /// <summary>进入好友页时清掉好友申请红点（IM 未读保留，等用户点开会话）。</summary>
+    private void ClearUnread()
     {
-        var pair = new[] { _account?.Code ?? "", otherCode }
-            .OrderBy(code => code, StringComparer.Ordinal)
-            .ToArray();
-        return $"dm:{pair[0]}-{pair[1]}";
+        _unreadFriendRequests = 0;
+        RecomputeUnread();
     }
 
     private bool _inboxWired;
@@ -1025,91 +1594,6 @@ public partial class MultiplayerPage : Page
                 }
             });
         }
-        account.DirectMessage += message => Dispatcher.BeginInvoke(() => OnPrivateMessage(message));
-        account.DirectError += text => Dispatcher.BeginInvoke(() => PrivateChatStatus.Text = text);
-    }
-
-    private void OpenPrivateChat(string code, string name)
-    {
-        _dmCode = code;
-        _dmName = name;
-        PrivateChatTitle.Text = string.IsNullOrWhiteSpace(name) ? code : $"{name}（{code}）";
-
-        // 本地记录（48 小时内）先载入，避免重开启动器后聊天记录空白
-        if (LogOf(code).Count == 0)
-        {
-            var stored = DirectMessageStore.Load(code);
-            if (stored.Count > 0) _dmLogs[code] = stored;
-        }
-
-        ShowView(PrivateChatView);
-        PrivateChatStatus.Text = "消息实时到达；对方不在线时，中继会保留最近 50 条";
-        RenderPrivateChat();
-
-        // 只清这位好友的未读，别把其他人发来的未读也一起抹掉
-        if (_unreadByPeer.Remove(code)) RecomputeUnread();
-    }
-
-    private void RenderPrivateChat()
-    {
-        PrivateChatMessages.Children.Clear();
-        var log = LogOf(_dmCode);
-        for (var i = 0; i < log.Count; i++)
-            PrivateChatMessages.Children.Add(BuildChatRow(log[i], _account?.Inbox, ShouldShowAvatar(log, i)));
-        PrivateChatScroll.ScrollToEnd();
-    }
-
-    private void ClearUnread()
-    {
-        _unreadFriendRequests = 0;
-        _unreadByPeer.Clear();
-        RecomputeUnread();
-    }
-
-    /// <summary>收到私聊：正在和这位好友聊天就直接显示，否则提示音 + 红点。</summary>
-    private void OnPrivateMessage(ChatMessage message)
-    {
-        // 优先按编码匹配（改名/重名都不会错位），退回按昵称
-        var fromCode = message.SenderCode ?? "";
-        var key = fromCode.Length > 0 ? fromCode : message.From;
-        var log = LogOf(key);
-        if (log.Count == 0)
-        {
-            // 先载入本地记录，下面的回放去重才有依据
-            var stored = DirectMessageStore.Load(key);
-            if (stored.Count > 0) _dmLogs[key] = log = stored;
-        }
-
-        // 中继重连时会回放频道最近 50 条：时间戳/发件人/内容完全相同的旧消息不再入库、不再响铃
-        if (log.Any(existing => existing.Timestamp == message.Timestamp
-                                && string.Equals(existing.From, message.From, StringComparison.OrdinalIgnoreCase)
-                                && existing.Text == message.Text))
-        {
-            return;
-        }
-
-        DirectMessageStore.Append(key, message);   // 本地保留 48 小时
-        log.Add(message);
-        while (log.Count > 300) log.RemoveAt(0);
-
-        var isCurrentChat = PrivateChatView.Visibility == Visibility.Visible
-                            && (fromCode.Length > 0
-                                ? string.Equals(_dmCode, fromCode, StringComparison.OrdinalIgnoreCase)
-                                : string.Equals(_dmName, message.From, StringComparison.OrdinalIgnoreCase));
-        if (isCurrentChat)
-        {
-            if (log.Count < 2 || message.Timestamp - log[^2].Timestamp > 5 * 60 * 1000)
-                PrivateChatMessages.Children.Add(BuildTimeDivider(message.Timestamp));
-            PrivateChatMessages.Children.Add(BuildChatRow(message, _account?.Inbox,
-                log.Count < 2 || ShouldShowAvatar(log, log.Count - 1)));
-            while (PrivateChatMessages.Children.Count > 300) PrivateChatMessages.Children.RemoveAt(0);
-            PrivateChatScroll.ScrollToEnd();
-            return;
-        }
-
-        _unreadByPeer[key] = _unreadByPeer.GetValueOrDefault(key) + 1;
-        RecomputeUnread();
-        PlayNotifySound();
     }
 
     /// <summary>内置提示音：现场生成一小段 WAV 播放，不依赖 Windows 声音方案。</summary>
@@ -1158,102 +1642,6 @@ public partial class MultiplayerPage : Page
         {
             // 没声音也不影响收消息
         }
-    }
-
-    private async void PrivateChatSend_Click(object sender, RoutedEventArgs e) => await SendPrivateAsync();
-
-    private async void PrivateChatInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key != System.Windows.Input.Key.Enter) return;
-        e.Handled = true;
-        await SendPrivateAsync();
-    }
-
-    private async Task SendPrivateAsync()
-    {
-        if (_sendingPrivate) return;
-        var text = PrivateChatInput.Text?.Trim() ?? "";
-        if (text.Length == 0) return;
-        var account = _account;
-        if (account is null)
-        {
-            PrivateChatStatus.Text = "请先注册或登录账号";
-            return;
-        }
-
-        _sendingPrivate = true;
-        try
-        {
-            PrivateChatInput.Text = "";
-            if (!await account.SendDirectAsync(_dmCode, text, "text", _quoteText))
-            {
-                PrivateChatInput.Text = text;   // 发送失败把内容还给用户，别丢
-                PrivateChatStatus.Text = "发送失败，请检查网络";
-                return;
-            }
-            ClearQuote();
-
-            // 本地先显示自己发的那条
-            var mine = new ChatMessage($"inbox:{_dmCode}", account.Inbox?.Name ?? account.Name, text,
-                DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), false, "text", account.Code);
-            DirectMessageStore.Append(_dmCode, mine);
-            LogOf(_dmCode).Add(mine);
-            RenderPrivateChat();
-        }
-        finally
-        {
-            _sendingPrivate = false;
-        }
-    }
-
-    private async void PrivateChatImage_Click(object sender, RoutedEventArgs e)
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "选择要发送的图片",
-            Filter = "图片 (*.png;*.jpg;*.jpeg;*.gif;*.bmp)|*.png;*.jpg;*.jpeg;*.gif;*.bmp"
-        };
-        if (dialog.ShowDialog() != true) return;
-
-        if (new System.IO.FileInfo(dialog.FileName).Length > 1024 * 1024)
-        {
-            PrivateChatStatus.Text = "图片太大（上限 1MB）";
-            return;
-        }
-
-        var account = _account;
-        if (account is null)
-        {
-            PrivateChatStatus.Text = "请先注册或登录账号";
-            return;
-        }
-
-        try
-        {
-            var bytes = await System.IO.File.ReadAllBytesAsync(dialog.FileName);
-            var base64 = Convert.ToBase64String(bytes);
-            var ok = await account.SendDirectAsync(_dmCode, base64, "image");
-            PrivateChatStatus.Text = ok ? "图片已发送" : "图片发送失败";
-            if (ok)
-            {
-                var sent = new ChatMessage($"inbox:{_dmCode}", account.Inbox?.Name ?? account.Name, base64,
-                    DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), false, "image", account.Code);
-                DirectMessageStore.Append(_dmCode, sent);
-                LogOf(_dmCode).Add(sent);
-                RenderPrivateChat();
-            }
-        }
-        catch (Exception ex)
-        {
-            PrivateChatStatus.Text = "图片发送失败：" + ex.Message;
-        }
-    }
-
-    private void PrivateChatBack_Click(object sender, RoutedEventArgs e)
-    {
-        ShowView(FriendsView);
-        RenderFriendAccount();
-        RenderFriends();
     }
 
     private DispatcherTimer? _friendRefreshTimer;
@@ -1339,11 +1727,11 @@ public partial class MultiplayerPage : Page
                 {
                     Margin = new Thickness(4, 6, 4, 6),
                     Cursor = System.Windows.Input.Cursors.Hand,
-                    ToolTip = "点击开始私聊"
+                    ToolTip = "点击开始聊天"
                 };
                 var friendCode = friend.Code;
                 var friendName = friend.Name;
-                row.MouseLeftButtonUp += (_, _) => OpenPrivateChat(friendCode, friendName);
+                row.MouseLeftButtonUp += (_, _) => OpenFriendChat(friendCode, friendName);
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
