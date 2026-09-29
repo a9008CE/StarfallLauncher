@@ -81,16 +81,28 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0" Margin="24,10,24,10">
-                            <TextBlock Text="{DynamicResource BrandText}" FontSize="15" FontWeight="Bold"
+                        <Grid x:Name="SidebarBrandRow" Grid.Row="0" Margin="20,10,20,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="SidebarBrandText" Grid.Column="0" Text="{DynamicResource BrandText}"
+                                       FontSize="15" FontWeight="Bold"
                                        FontFamily="{DynamicResource UiDisplayFontFamily}"
-                                       Foreground="{DynamicResource TextBrush}"/>
-                        </StackPanel>
+                                       Foreground="{DynamicResource TextBrush}"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Button x:Name="SidebarToggleButton" Grid.Column="1" Content="&#xE76B;"
+                                    FontFamily="Segoe MDL2 Assets" FontSize="12"
+                                    Style="{DynamicResource WindowBtn}" Width="30" Height="28"
+                                    ToolTip="收起侧栏" Click="SidebarToggle_Click"
+                                    VerticalAlignment="Center"/>
+                        </Grid>
 
-                        <Border Grid.Row="1" Height="1" Background="{DynamicResource BorderBrush}"
+                        <Border x:Name="SidebarDivider" Grid.Row="1" Height="1"
+                                Background="{DynamicResource BorderBrush}"
                                 Margin="24,4,24,8"/>
 
-                        <StackPanel Grid.Row="2">
+                        <StackPanel x:Name="SidebarNavArea" Grid.Row="2">
                             <StackPanel Visibility="{DynamicResource CyberpunkVisibility}"
                                         Margin="24,0,24,14">
                                 <TextBlock Text="NIGHT CITY" FontSize="10" FontWeight="Bold"
@@ -241,7 +253,7 @@
                         </StackPanel>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="3" Text="{x:Static services:UpdateService.DisplayVersion}" FontSize="10"
+                        <TextBlock x:Name="SidebarVersionText" Grid.Row="3" Text="{x:Static services:UpdateService.DisplayVersion}" FontSize="10"
                                    FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
                                    Margin="24,0,24,8" Opacity="0.6"/>
                     </Grid>

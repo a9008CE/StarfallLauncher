@@ -78,6 +78,19 @@ public partial class SettingsPage : Page
             await CheckForUpdateAsync(true);
     }
 
+    private void ShowAnnouncement_Click(object sender, RoutedEventArgs e)
+    {
+        var announcement = UpdateService.LoadAnnouncement();
+        var notes = string.IsNullOrWhiteSpace(announcement.Notes)
+            ? "本次更新暂无详细说明。"
+            : announcement.Notes.Trim();
+        AnimatedMessageBox.Show(
+            $"星落 LaunCher {announcement.Version}\n\n{notes}",
+            "更新公告",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
     private async Task RefreshJavaListAsync()
     {
         JavaInfoText.Text = "正在检测 Java...";

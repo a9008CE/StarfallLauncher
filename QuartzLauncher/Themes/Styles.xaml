@@ -583,7 +583,7 @@
                                     <ScaleTransform ScaleY="1"/>
                                 </Border.RenderTransform>
                             </Border>
-                            <Grid Margin="6,2,8,2">
+                            <Grid x:Name="navContentGrid" Margin="6,2,8,2">
                                 <Border x:Name="activeBg" CornerRadius="{DynamicResource ButtonCornerRadius}"
                                         Background="{DynamicResource NavActiveBgBrush}" Opacity="0"/>
                                 <Border x:Name="hoverBg" CornerRadius="{DynamicResource ButtonCornerRadius}" Padding="0"
@@ -591,7 +591,8 @@
                                     <Border.RenderTransform>
                                         <ScaleTransform ScaleX="1" ScaleY="1"/>
                                     </Border.RenderTransform>
-                                    <ContentPresenter HorizontalAlignment="{DynamicResource NavTextAlignment}"
+                                    <ContentPresenter x:Name="navContent"
+                                                      HorizontalAlignment="{DynamicResource NavTextAlignment}"
                                                       VerticalAlignment="Center" Margin="14,10"
                                                       local:NavAlignmentAnimationBehavior.IsEnabled="True"/>
                                 </Border>

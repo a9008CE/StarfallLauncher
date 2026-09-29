@@ -36,6 +36,12 @@ public class Settings
     public string ThemeSidebar { get; set; } = "";
     public string ThemeBorder { get; set; } = "";
     public string ThemeBackgroundImage { get; set; } = "";
+    /// <summary>是否轮播 Launcher/backgrounds 里的全部预设背景。</summary>
+    public bool ThemeBackgroundCarousel { get; set; }
+    /// <summary>轮播切换间隔（秒）。</summary>
+    public int ThemeBackgroundCarouselSeconds { get; set; } = 12;
+    /// <summary>未轮播时手动选中的预设序号（按文件名排序）。</summary>
+    public int ThemeBackgroundIndex { get; set; }
     public string ThemeDanger { get; set; } = "";
     public string ThemeSuccess { get; set; } = "";
     public string ThemeMode { get; set; } = "dark";
@@ -68,6 +74,8 @@ public class Settings
     public bool AutoUpdate { get; set; } = false;
     public bool RunAsUpdateServer { get; set; } = true;
     public string UpdateManifestUrl { get; set; } = DefaultUpdateManifestUrl;
+    /// <summary>最近一次标记已读的公告键（启动器版本 + 公告版本）。</summary>
+    public string AnnouncementReadVersion { get; set; } = "";
     public string MicrosoftRefreshToken { get; set; } = "";
     public long MicrosoftTokenExpiresAt { get; set; }
     public List<MicrosoftAccount> MicrosoftAccounts { get; set; } = new();
@@ -76,6 +84,7 @@ public class Settings
     public string PageAnimationStyle { get; set; } = "slide";
     public bool AdvancedAnimationEnabled { get; set; }
     public bool SidebarTextLeftAligned { get; set; } = true;
+    public bool SidebarCollapsed { get; set; }
     public string ResourceCenterStyle { get; set; } = "list";
     public int TearAnimationDurationMs { get; set; } = 760;
     public int TearApexSharpness { get; set; } = 50;

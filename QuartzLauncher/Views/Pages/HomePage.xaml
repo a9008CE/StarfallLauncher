@@ -4,44 +4,28 @@
       xmlns:behavior="clr-namespace:QuartzLauncher.Services"
       Background="Transparent">
     <Grid>
-        <Grid Margin="36,6,36,20">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0">
-                <TextBlock Text="HOME" Style="{DynamicResource PageEyebrow}"/>
-                <TextBlock Text="开始游戏" Style="{DynamicResource PageTitle}"/>
-                <TextBlock Text="选择实例并启动 Minecraft。" Style="{DynamicResource PageSubtitle}"/>
-
-                <Border x:Name="AccountExpiredCard" Visibility="Collapsed" Margin="0,12,0,0"
-                        Style="{DynamicResource CardStyle}" Padding="14,10">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="账号登录状态已过期（好友、私聊、在线状态需要重新登录）" FontSize="12"
-                                   VerticalAlignment="Center" Foreground="{DynamicResource DangerBrush}"/>
-                        <Button Content="重新登录" Style="{DynamicResource BtnPrimary}" Height="30"
-                                Padding="14,2" Margin="14,0,0,0" Click="ReLoginFromHome_Click"/>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
-
-                <Grid Grid.Row="1">
+        <Grid Margin="36,18,36,20">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="2*" MinWidth="320"/>
                         <ColumnDefinition Width="20"/>
                         <ColumnDefinition Width="*" MinWidth="260"/>
                     </Grid.ColumnDefinitions>
 
-                    <Border Grid.Column="0" Style="{DynamicResource CardStyle}">
+                    <Border x:Name="HomeNoticeCard" Grid.Column="0" Style="{DynamicResource CardStyle}">
                         <Grid>
-                            <DockPanel x:Name="AnnouncementPanel">
+                             <DockPanel x:Name="AnnouncementPanel">
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-                                    <Button DockPanel.Dock="Right" Content="展开日志" Style="{DynamicResource BtnBase}"
-                                            Padding="10,5" Click="ExpandLog_Click" FontSize="12"/>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button x:Name="AnnouncementReadButton" Content="已读" Style="{DynamicResource BtnBase}"
+                                                Padding="10,5" Click="AnnouncementRead_Click" FontSize="12"/>
+                                        <Button Content="展开日志" Style="{DynamicResource BtnBase}"
+                                                Padding="10,5" Margin="8,0,0,0" Click="ExpandLog_Click" FontSize="12"/>
+                                    </StackPanel>
                                     <TextBlock Text="更新公告" Style="{DynamicResource SectionHeader}"
                                                VerticalAlignment="Center"/>
                                 </DockPanel>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <ScrollViewer x:Name="AnnouncementContent" VerticalScrollBarVisibility="Auto">
                                     <StackPanel Margin="4,2,12,4">
                                         <TextBlock x:Name="AnnouncementVersionText" Text="QuartzLauncher"
                                                    FontSize="18" FontWeight="SemiBold"
@@ -53,10 +37,10 @@
                                                    FontSize="12" Foreground="{DynamicResource TextMutedBrush}"
                                                    TextWrapping="Wrap" LineHeight="21"/>
                                     </StackPanel>
-                                </ScrollViewer>
-                            </DockPanel>
+                                 </ScrollViewer>
+                             </DockPanel>
 
-                            <DockPanel x:Name="LogPanel" Visibility="Collapsed">
+                             <DockPanel x:Name="LogPanel" Visibility="Collapsed">
                                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                         <Button Content="分析日志" Style="{DynamicResource BtnBase}" Padding="10,5"

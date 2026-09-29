@@ -237,11 +237,9 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                     <Button Content="刷新好友" Style="{DynamicResource BtnBase}" Height="30"
                             Padding="12,2" Click="RefreshFriends_Click"/>
-                    <Button x:Name="ImEntryBtn" Content="IM 消息" Style="{DynamicResource BtnPrimary}" Height="30"
-                            Padding="12,2" Margin="8,0,0,0" Click="ImEntry_Click"/>
                     <TextBlock x:Name="FriendAutoRefreshHint" FontSize="11" VerticalAlignment="Center"
                                Margin="10,0,0,0" Foreground="{DynamicResource TextMutedBrush}"
-                               Text="（停留在本页时每 15 秒自动刷新）"/>
+                               Text="（停留在本页时每 15 秒自动同步好友与消息，点任意好友直接开聊）"/>
                 </StackPanel>
 
                 <TextBlock x:Name="FriendStatusText" FontSize="11" Margin="0,0,0,8"
@@ -255,40 +253,7 @@
             </Border>
         </Grid>
 
-        <!-- IM 会话列表（好友单聊，离线消息也能收到）-->
-        <Grid x:Name="ImListView" Grid.Column="1" Visibility="Collapsed" Margin="36,26,36,24">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <Grid Grid.Row="0" Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Button Content="← 返回好友" Style="{DynamicResource BtnBase}" Height="30" Padding="12,2"
-                        Click="ImListBack_Click"/>
-                <TextBlock Grid.Column="1" Text="IM 消息" FontSize="16" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Margin="12,0,0,0"
-                           Foreground="{DynamicResource TextBrush}"/>
-                <Button Grid.Column="2" x:Name="ImRefreshBtn" Content="刷新" Style="{DynamicResource BtnBase}"
-                        Height="30" Padding="12,2" Click="ImRefresh_Click"/>
-            </Grid>
-
-            <TextBlock x:Name="ImListStatus" Grid.Row="1" FontSize="11" Margin="0,0,0,8"
-                       TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}"/>
-
-            <Border Grid.Row="2" Style="{DynamicResource CardStyle}" MinHeight="280">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel x:Name="ImSessionList"/>
-                </ScrollViewer>
-            </Border>
-        </Grid>
-
-        <!-- IM 聊天窗（文本 + BBCode 表情 + 5 分钟撤回）-->
+        <!-- IM 聊天窗（文本 + BBCode 表情 + 5 分钟撤回），从好友行直接进入 -->
         <Grid x:Name="ImChatView" Grid.Column="1" Visibility="Collapsed" Margin="36,26,36,24">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -303,7 +268,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <Button Content="← 返回会话" Style="{DynamicResource BtnBase}" Height="30" Padding="12,2"
+                <Button Content="← 返回好友" Style="{DynamicResource BtnBase}" Height="30" Padding="12,2"
                         Click="ImChatBack_Click"/>
                 <TextBlock x:Name="ImChatTitle" Grid.Column="1" FontSize="15" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="12,0,0,0"

@@ -175,6 +175,8 @@
                                 Padding="12,6" Click="UpdateMode_Click" Margin="0,0,8,0"/>
                         <Button x:Name="CheckUpdateButton" Content="获取更新" Style="{DynamicResource BtnPrimary}"
                                 Padding="14,6" Click="CheckUpdate_Click"/>
+                        <Button Content="查看更新公告" Style="{DynamicResource BtnBase}"
+                                Padding="12,6" Margin="8,0,0,0" Click="ShowAnnouncement_Click"/>
                     </StackPanel>
                 </StackPanel>
             </Border>

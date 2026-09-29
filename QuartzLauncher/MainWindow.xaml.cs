@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -20,6 +20,9 @@ namespace QuartzLauncher;
 public partial class MainWindow : Window
 {
     private const int DwmWindowCornerPreference = 33;
+    private const double CollapsedSidebarWidth = 52;
+    private DispatcherTimer? _sidebarWidthTimer;
+    private int _sidebarAnimationGeneration;
     private const int DwmCornerRound = 2;
     private const double OuterWindowCornerRadius = 12;
 
@@ -64,6 +67,7 @@ public partial class MainWindow : Window
     private DispatcherTimer? _quoteTimer;
     private int _navigationGeneration;
     private int _themeTransitionGeneration;
+
     private int _windowStateAnimationGeneration;
     private bool _isMinimizeAnimating;
     private WindowState _previousWindowState = WindowState.Normal;
@@ -105,6 +109,7 @@ public partial class MainWindow : Window
         _startupInitialHeight = Math.Max(MinHeight, _startupTargetHeight * 0.94);
         Width = _startupInitialWidth;
         Height = _startupInitialHeight;
+        SetSidebarCollapsed(App.Settings.Data.SidebarCollapsed, save: false);
 
         MainFrame.Navigate(HomePage);
         // 联机大厅未读私聊红点
@@ -159,6 +164,271 @@ public partial class MainWindow : Window
         {
             // Keep the window usable if native corner APIs are unavailable.
         }
+    }
+
+    private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+    {
+        SetSidebarCollapsed(!App.Settings.Data.SidebarCollapsed);
+    }
+
+    private void SetSidebarCollapsed(bool collapsed, bool save = true)
+    {
+        App.Settings.Data.SidebarCollapsed = collapsed;
+        if (save) App.Settings.Save();
+        AnimateSidebarTo(collapsed);
+    }
+
+    /// <summary>启动/切页时直接落位，不做动画，避免和页面转场叠加。</summary>
+    private void ApplySidebarCollapsedState()
+    {
+        _sidebarAnimationGeneration++;
+        _sidebarWidthTimer?.Stop();
+        _sidebarWidthTimer = null;
+        SidebarColumn.Width = SidebarWidthForCurrentState();
+        // 启动/切页直接落位，不需要淡入淡出
+        ApplySidebarSurfaceState(animate: false);
+    }
+
+    /// <summary>展开/收起：宽度过渡 + 文字淡出淡入，中途连点也不会错位。</summary>
+    private void AnimateSidebarTo(bool collapsed)
+    {
+        if (!IsLoaded)
+        {
+            ApplySidebarCollapsedState();
+            return;
+        }
+
+        var animationGeneration = ++_sidebarAnimationGeneration;
+        var expandedWidth = new GridLength(CurrentSidebarWidth());
+        var from = SidebarColumn.ActualWidth > 0 ? SidebarColumn.ActualWidth : expandedWidth.Value;
+        _sidebarWidthTimer?.Stop();
+        _sidebarWidthTimer = null;
+        ApplySidebarSurfaceState(animate: true);
+
+        var to = collapsed ? new GridLength(CollapsedSidebarWidth) : expandedWidth;
+        var duration = TimeSpan.FromMilliseconds(collapsed ? 220 : 260);
+        var ease = new CubicEase { EasingMode = collapsed ? EasingMode.EaseIn : EasingMode.EaseOut };
+
+        // 文字先淡出、宽度再收拢：顺序反过来会出现文字被硬生生切掉的观感
+        FadeSidebarLabels(collapsed ? 0 : 1, duration, ease, animationGeneration);
+
+        var started = Stopwatch.StartNew();
+        var timer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+        timer.Tick += (_, _) =>
+        {
+            if (animationGeneration != _sidebarAnimationGeneration)
+            {
+                timer.Stop();
+                return;
+            }
+
+            var progress = Math.Clamp(started.Elapsed.TotalMilliseconds / duration.TotalMilliseconds, 0, 1);
+            var eased = ease.Ease(progress);
+            var width = from + (to.Value - from) * eased;
+            SidebarColumn.Width = new GridLength(width);
+
+            if (progress < 1) return;
+            timer.Stop();
+            if (animationGeneration == _sidebarAnimationGeneration)
+            {
+                SidebarColumn.Width = to;
+                _sidebarWidthTimer = null;
+            }
+        };
+        _sidebarWidthTimer = timer;
+        timer.Start();
+    }
+
+    private void FadeSidebarLabels(double target, Duration duration, IEasingFunction ease,
+        int animationGeneration)
+    {
+        var animation = new DoubleAnimation(target, duration)
+        {
+            EasingFunction = ease,
+            FillBehavior = FillBehavior.HoldEnd
+        };
+        foreach (var element in new FrameworkElement[] { SidebarBrandText, SidebarVersionText })
+        {
+            element.Visibility = Visibility.Visible;
+            var elementAnimation = animation.Clone();
+            elementAnimation.Completed += (_, _) =>
+            {
+                if (animationGeneration == _sidebarAnimationGeneration && target == 0)
+                    element.Visibility = Visibility.Collapsed;
+            };
+            element.BeginAnimation(OpacityProperty, elementAnimation);
+        }
+    }
+
+    /// <summary>收起态下的排版：品牌文字隐藏、导航项只留图标，按钮始终可见可再次展开。</summary>
+    private void ApplySidebarSurfaceState(bool animate = true)
+    {
+        var collapsed = App.Settings.Data.SidebarCollapsed;
+
+        SidebarBorder.Visibility = Visibility.Visible;
+        SidebarBorder.BeginAnimation(UIElement.VisibilityProperty, null);
+        SidebarBorder.ClearValue(UIElement.VisibilityProperty);
+        SidebarBorder.BeginAnimation(OpacityProperty, null);
+        SidebarBorder.Opacity = 1;
+
+        // 窄条只有 52px，左右 20px 内边距会把按钮挤掉，这里必须一起收窄
+        SidebarBrandRow.Margin = collapsed ? new Thickness(6, 10, 6, 10) : new Thickness(20, 10, 20, 10);
+        SidebarDivider.Margin = collapsed ? new Thickness(6, 4, 6, 8) : new Thickness(24, 4, 24, 8);
+
+        if (!animate)
+        {
+            SidebarBrandText.BeginAnimation(OpacityProperty, null);
+            SidebarVersionText.BeginAnimation(OpacityProperty, null);
+            SidebarBrandText.Opacity = collapsed ? 0 : 1;
+            SidebarVersionText.Opacity = collapsed ? 0 : 1;
+            SidebarBrandText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+            SidebarVersionText.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        }
+        else
+        {
+            SidebarBrandText.Visibility = Visibility.Visible;
+            SidebarVersionText.Visibility = Visibility.Visible;
+        }
+
+        SetNavItemsCompact(collapsed, animate);
+
+        SidebarToggleButton.Content = collapsed ? "\uE76C" : "\uE76B";
+        SidebarToggleButton.ToolTip = collapsed ? "展开侧栏" : "收起侧栏";
+    }
+
+    /// <summary>收起时导航项只显示图标（文字隐藏、图标居中），保证窄条里仍可直接切页。</summary>
+    private void SetNavItemsCompact(bool compact, bool animate = true)
+    {
+        foreach (var stack in new[] { NavStack, NavStackMultiplayer })
+        {
+            foreach (var child in stack.Children)
+            {
+                if (child is not RadioButton button) continue;
+                if (FindDescendant<Panel>(button) is not { } content) continue;
+
+                content.HorizontalAlignment = compact
+                    ? HorizontalAlignment.Center
+                    : HorizontalAlignment.Left;
+                if (!compact) content.ClearValue(HorizontalAlignmentProperty);
+
+                foreach (var text in content.Children.OfType<TextBlock>())
+                {
+                    var isIcon = text.FontFamily?.Source?.Contains("MDL2", StringComparison.OrdinalIgnoreCase) == true;
+                    if (isIcon)
+                    {
+                        // 图标宽度由 XAML 固定为 22，这里只需去掉右侧文字间距
+                        text.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 10, 0);
+                    }
+                    else if (compact)
+                    {
+                        text.Visibility = Visibility.Visible;
+                        if (!animate)
+                        {
+                            text.Opacity = 0;
+                            text.Visibility = Visibility.Collapsed;
+                            continue;
+                        }
+
+                        // 淡出结束后才真正折叠，避免文字被硬切
+                        var fade = new DoubleAnimation(text.Opacity, 0, TimeSpan.FromMilliseconds(140))
+                        {
+                            FillBehavior = FillBehavior.HoldEnd
+                        };
+                        var generation = _sidebarAnimationGeneration;
+                        fade.Completed += (_, _) =>
+                        {
+                            if (generation == _sidebarAnimationGeneration
+                                && App.Settings.Data.SidebarCollapsed)
+                                text.Visibility = Visibility.Collapsed;
+                        };
+                        text.BeginAnimation(UIElement.OpacityProperty, fade);
+                    }
+                    else
+                    {
+                        text.BeginAnimation(UIElement.OpacityProperty, null);
+                        text.Visibility = Visibility.Visible;
+                        if (animate)
+                        {
+                            text.Opacity = 0;
+                            text.BeginAnimation(UIElement.OpacityProperty,
+                                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160))
+                                {
+                                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                                });
+                        }
+                        else
+                        {
+                            text.Opacity = 1;
+                        }
+                    }
+                }
+
+                ApplyCompactNavTemplate(button, compact);
+            }
+        }
+    }
+
+    /// <summary>
+    /// NavBtn 模板里 indicator(3px) + Grid(6/8px) + ContentPresenter(14px×2) 共 45px 固定内边距，
+    /// 52px 窄条放不下，收起时必须逐层压缩，否则图标会被裁掉。
+    /// </summary>
+    private static void ApplyCompactNavTemplate(RadioButton button, bool compact)
+    {
+        button.ApplyTemplate();
+        if (button.Template is not { } template) return;
+
+        if (template.FindName("navContentGrid", button) is FrameworkElement grid)
+            grid.Margin = compact ? new Thickness(2, 2, 2, 2) : new Thickness(6, 2, 8, 2);
+        if (template.FindName("navContent", button) is FrameworkElement presenter)
+        {
+            presenter.Margin = compact ? new Thickness(2, 10, 2, 10) : new Thickness(14, 10, 14, 10);
+            presenter.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+            if (!compact) presenter.ClearValue(HorizontalAlignmentProperty);
+        }
+    }
+
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        foreach (var raw in LogicalTreeHelper.GetChildren(parent))
+        {
+            if (raw is not DependencyObject child) continue;
+            if (child is T match) return match;
+            if (FindDescendant<T>(child) is { } nested) return nested;
+        }
+        return null;
+    }
+
+    private static double CurrentSidebarWidth()
+    {
+        try
+        {
+            if (Application.Current?.TryFindResource("SidebarWidth") is GridLength length)
+                return length.Value;
+        }
+        catch
+        {
+        }
+        return 240;
+    }
+
+    /// <summary>侧栏实际宽度：收起时只留按钮那一小条，展开时跟随主题宽度。</summary>
+    private GridLength SidebarWidthForCurrentState()
+        => App.Settings.Data.SidebarCollapsed
+            ? new GridLength(CollapsedSidebarWidth)
+            : new GridLength(CurrentSidebarWidth());
+
+    private void SyncSidebarWidthForStandalone(bool standalone)
+    {
+        if (standalone)
+        {
+            SidebarColumn.Width = new GridLength(0);
+            return;
+        }
+
+        ApplySidebarCollapsedState();
     }
 
     private DownloadTask? _nextToast;
@@ -302,17 +572,12 @@ public partial class MainWindow : Window
         {
         }
 
-        // 启动时恢复账号登录态并刷新好友列表（令牌失效时首页会显示重新登录卡片）
+        // 启动时恢复账号登录态并刷新好友列表；令牌失效时由首页弹一次提示
         try
         {
             var account = AccountService.Ensure();
             await account.TryRestoreAsync(HomePage.CurrentPlayerName());
             if (account.NeedsReLogin) HomePage.NotifyAccountExpired();
-            // 在别的页面（联机-好友）重新登录成功后，首页的过期卡片也要收起来
-            account.Changed += () => Dispatcher.BeginInvoke(new Action(() =>
-            {
-                if (account.IsLoggedIn) HomePage.HideAccountExpired();
-            }));
         }
         catch
         {
@@ -970,7 +1235,7 @@ public partial class MainWindow : Window
                 SidebarBorder.RenderTransform = null;
                 SidebarBorder.Opacity = 1;
                 SidebarBorder.Visibility = targetUsesStandaloneSidebar ? Visibility.Collapsed : Visibility.Visible;
-                SidebarColumn.Width = targetUsesStandaloneSidebar ? new GridLength(0) : new GridLength(240);
+                SyncSidebarWidthForStandalone(targetUsesStandaloneSidebar);
                 MainFrame.RenderTransform = null;
                 MainFrame.Opacity = 1;
                 MainFrame.IsHitTestVisible = true;
@@ -1024,10 +1289,14 @@ public partial class MainWindow : Window
             var showSidebar = !targetUsesStandaloneSidebar;
             if (showSidebar)
             {
-                SidebarColumn.Width = new GridLength(240);
-                SidebarBorder.Visibility = Visibility.Visible;
-                SidebarBorder.Opacity = 1;
-                if (!sidebarWasVisible)
+                // 收起状态下侧栏一直可见，不要再播「整条滑入」动画
+                var collapsed = App.Settings.Data.SidebarCollapsed;
+                ApplySidebarCollapsedState();
+                if (collapsed)
+                {
+                    SidebarBorder.RenderTransform = null;
+                }
+                else if (!sidebarWasVisible)
                 {
                     var sidebarEnter = new TranslateTransform(-240, 0);
                     SidebarBorder.RenderTransform = sidebarEnter;
@@ -1116,9 +1385,7 @@ public partial class MainWindow : Window
         SidebarBorder.Visibility = targetUsesStandaloneSidebar
             ? Visibility.Collapsed
             : Visibility.Visible;
-        SidebarColumn.Width = targetUsesStandaloneSidebar
-            ? new GridLength(0)
-            : new GridLength(240);
+        SyncSidebarWidthForStandalone(targetUsesStandaloneSidebar);
         MainFrame.Opacity = 1;
         MainFrame.IsHitTestVisible = true;
     }
@@ -1396,7 +1663,7 @@ public partial class MainWindow : Window
         if (!targetUsesStandaloneSidebar)
         {
             SidebarBorder.Visibility = Visibility.Visible;
-            SidebarColumn.Width = new GridLength(240);
+            SyncSidebarWidthForStandalone(false);
             SidebarBorder.Opacity = 0;
             var sidebarTransform = new TranslateTransform(-32, 0);
             SidebarBorder.RenderTransform = sidebarTransform;
@@ -1440,10 +1707,9 @@ public partial class MainWindow : Window
         SidebarBorder.RenderTransform = null;
         SidebarBorder.Opacity = 1;
         SidebarBorder.Visibility = targetUsesStandaloneSidebar ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = targetUsesStandaloneSidebar ? new GridLength(0) : new GridLength(240);
+        SyncSidebarWidthForStandalone(targetUsesStandaloneSidebar);
         MainFrame.IsHitTestVisible = true;
     }
-
     private async Task RunDissolveTransitionAsync(Page page, bool targetUsesStandaloneSidebar, int generation)
     {
         var exitDuration = 220;
@@ -1489,7 +1755,7 @@ public partial class MainWindow : Window
             SidebarBorder.RenderTransform = null;
             SidebarBorder.Visibility = Visibility.Visible;
             SidebarBorder.Opacity = 0;
-            SidebarColumn.Width = new GridLength(240);
+            SidebarColumn.Width = SidebarWidthForCurrentState();
         }
         else
         {
@@ -1518,7 +1784,7 @@ public partial class MainWindow : Window
         SidebarBorder.RenderTransform = null;
         SidebarBorder.Opacity = 1;
         SidebarBorder.Visibility = targetUsesStandaloneSidebar ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = targetUsesStandaloneSidebar ? new GridLength(0) : new GridLength(240);
+        SyncSidebarWidthForStandalone(targetUsesStandaloneSidebar);
         MainFrame.IsHitTestVisible = true;
     }
 
@@ -1528,7 +1794,7 @@ public partial class MainWindow : Window
         SidebarBorder.RenderTransform = null;
         SidebarBorder.Opacity = 1;
         SidebarBorder.Visibility = standalone ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = standalone ? new GridLength(0) : new GridLength(240);
+        SyncSidebarWidthForStandalone(standalone);
     }
 
     private double ResolveTearAngle(bool randomDirection, string fixedDirection)

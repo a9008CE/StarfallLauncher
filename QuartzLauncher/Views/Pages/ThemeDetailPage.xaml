@@ -15,6 +15,59 @@
                 </StackPanel>
             </Border>
 
+            <Border x:Name="CustomBackgroundCard" Style="{DynamicResource CardStyle}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="自定义背景" Style="{DynamicResource SectionHeader}" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="CustomBackgroundStatus" FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                    Margin="24,0,0,0">
+                            <Button Content="打开图库目录" Style="{DynamicResource BtnBase}" Padding="12,6"
+                                    Click="OpenBackgroundFolder_Click"/>
+                            <Button x:Name="ChooseBackgroundButton" Content="选择图片"
+                                    Style="{DynamicResource BtnBase}" Padding="12,6" Margin="8,0,0,0"
+                                    Click="ChooseBackground_Click"/>
+                            <Button x:Name="ClearBackgroundButton" Content="取消固定"
+                                    Style="{DynamicResource BtnBase}" Padding="12,6" Margin="8,0,0,0"
+                                    ToolTip="取消当前固定的图片，文件仍保留在图库中"
+                                    Click="ClearBackground_Click"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="预设图库" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                               Margin="0,14,0,8"/>
+                    <WrapPanel x:Name="BackgroundPresetPanel"/>
+
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="轮播背景" FontSize="12" Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock x:Name="CarouselStatus" FontSize="11" Margin="0,2,0,0"
+                                       Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                    Margin="24,0,0,0">
+                            <ComboBox x:Name="CarouselSecondsBox" Width="86" Height="28" FontSize="11"
+                                      SelectionChanged="CarouselSeconds_SelectionChanged"/>
+                            <ToggleButton x:Name="BackgroundCarouselSwitch" Style="{DynamicResource IosSwitch}"
+                                          Margin="10,0,0,0" Click="BackgroundCarousel_Click"
+                                          VerticalAlignment="Center"
+                                          ToolTip="按间隔轮播图库中的全部背景"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
             <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,16">
                 <Grid>
                     <Grid.ColumnDefinitions>

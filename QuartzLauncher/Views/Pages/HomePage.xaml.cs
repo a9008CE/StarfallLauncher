@@ -29,9 +29,11 @@ public partial class HomePage : Page
     private DispatcherTimer? _panelSwitchTimer;
     private Panel? _activeLoginPanel;
     private int _panelAnimationGeneration;
-    private int _homePanelAnimationGeneration;
     private bool _passwordVisible;
     private CancellationTokenSource? _microsoftLoginCts;
+    private string _announcementKey = "";
+    private bool _announcementRead;
+    private bool _logHasError;
 
     public HomePage(VersionsPage versionsPage)
     {
@@ -59,11 +61,80 @@ public partial class HomePage : Page
     private void RefreshAnnouncement()
     {
         var announcement = UpdateService.LoadAnnouncement();
+        _announcementKey = $"{UpdateService.CurrentVersion}|{announcement.Version}";
         AnnouncementVersionText.Text = $"QuartzLauncher {announcement.Version}";
         AnnouncementTitleText.Text = $"{announcement.Version} 更新内容";
         AnnouncementNotesText.Text = string.IsNullOrWhiteSpace(announcement.Notes)
             ? "本次更新暂无文字说明。"
             : NormalizeAnnouncementNotes(announcement.Notes);
+
+        _announcementRead = string.Equals(
+            App.Settings.Data.AnnouncementReadVersion,
+            _announcementKey,
+            StringComparison.Ordinal);
+        SetAnnouncementContentVisible(!_announcementRead);
+    }
+
+    private void SetAnnouncementContentVisible(bool visible)
+    {
+        _announcementRead = !visible;
+        AnnouncementContent.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        AnnouncementReadButton.Content = visible ? "已读" : "查看公告";
+        AnnouncementReadButton.ToolTip = visible ? "标记这版公告为已读" : "手动查看本次更新公告";
+        if (visible)
+        {
+            AnnouncementPanel.Visibility = Visibility.Visible;
+        }
+        UpdateHomeSurface();
+    }
+
+    private void AnnouncementRead_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_announcementKey)) return;
+
+        if (AnnouncementContent.Visibility == Visibility.Visible)
+        {
+            App.Settings.Data.AnnouncementReadVersion = _announcementKey;
+            App.Settings.Save();
+            SetAnnouncementContentVisible(false);
+        }
+        else
+        {
+            SetAnnouncementContentVisible(true);
+        }
+    }
+
+    private void UpdateHomeSurface()
+    {
+        var gameActive = _launchInProgress || _gameProcess is { HasExited: false };
+        var showLog = gameActive || _logHasError;
+
+        if (showLog)
+        {
+            HomeNoticeCard.Visibility = Visibility.Visible;
+            AnnouncementPanel.Visibility = Visibility.Collapsed;
+            LogPanel.Visibility = Visibility.Visible;
+            LogPanel.Opacity = 1;
+            LogPanel.IsHitTestVisible = true;
+            return;
+        }
+
+        if (_announcementRead)
+        {
+            HomeNoticeCard.Visibility = Visibility.Collapsed;
+            AnnouncementPanel.Visibility = Visibility.Collapsed;
+            LogPanel.Visibility = Visibility.Collapsed;
+            LogPanel.Opacity = 1;
+            LogPanel.IsHitTestVisible = false;
+            return;
+        }
+
+        HomeNoticeCard.Visibility = Visibility.Visible;
+        AnnouncementPanel.Visibility = Visibility.Visible;
+        AnnouncementContent.Visibility = Visibility.Visible;
+        LogPanel.Visibility = Visibility.Collapsed;
+        LogPanel.Opacity = 1;
+        LogPanel.IsHitTestVisible = false;
     }
 
     private static string NormalizeAnnouncementNotes(string notes)
@@ -89,43 +160,18 @@ public partial class HomePage : Page
         return string.IsNullOrWhiteSpace(name) ? "玩家" : name.Trim();
     }
 
-    /// <summary>主窗口启动时发现登录令牌失效 → 首页显示重新登录卡片。</summary>
-    public void NotifyAccountExpired() => AccountExpiredCard.Visibility = Visibility.Visible;
+    private bool _accountExpiryDialogShown;
 
-    /// <summary>在别的页面重新登录成功 → 收起重新登录卡片。</summary>
-    public void HideAccountExpired() => AccountExpiredCard.Visibility = Visibility.Collapsed;
-
-    private void ReLoginFromHome_Click(object sender, RoutedEventArgs e)
+    /// <summary>主窗口启动时发现登录令牌失效：只弹一次提示，不在首页常驻占位。</summary>
+    public void NotifyAccountExpired()
     {
-        var account = AccountService.Current;
-        if (account == null || string.IsNullOrEmpty(account.Code)) return;
-
-        var password = AccountDialogs.ShowReLogin(Window.GetWindow(this), account.Code);
-        if (password == null) return;
-
-        _ = ReloginAsync(account, password);
-    }
-
-    private async Task ReloginAsync(AccountService account, string password)
-    {
-        try
-        {
-            var error = await account.LoginAsync(account.Code, password, CurrentPlayerName());
-            if (error == null)
-            {
-                AccountExpiredCard.Visibility = Visibility.Collapsed;
-                RefreshProfile();
-            }
-            else
-            {
-                // 输错密码等失败原因要显示出来，否则用户以为按钮失灵
-                AnimatedMessageBox.Show(error, "重新登录", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-        catch
-        {
-            // 登录失败时保留卡片，用户可再试
-        }
+        if (_accountExpiryDialogShown) return;
+        _accountExpiryDialogShown = true;
+        Dispatcher.BeginInvoke(new Action(() => AnimatedMessageBox.Show(
+            "账号登录状态已过期。好友、私聊和在线状态暂时不可用，请到「联机」→「好友」重新登录。",
+            "账号登录已过期",
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning)));
     }
 
     /// <summary>皮肤脸部头像（正版走官方、第三方走 Yggdrasil、离线用本地皮肤或默认 Steve/Alex）。</summary>
@@ -257,6 +303,12 @@ public partial class HomePage : Page
     {
         LaunchBtn.IsEnabled = InstanceSelector.SelectedItem is ComboBoxItem;
         UpdateInstanceInfo();
+        if (_gameProcess is not { HasExited: false })
+        {
+            LogBox.Document.Blocks.Clear();
+            if (LogPanel.Visibility == Visibility.Visible)
+                LoadStoredGameLogIfEmpty();
+        }
     }
 
     /// <summary>版本 JSON 还在（含导入的联接目录）才算有效实例，否则视为已删除。</summary>
@@ -413,6 +465,7 @@ public partial class HomePage : Page
         var quickPlay = QuickPlayRequest.Consume();
 
         SetLogPanelExpanded(true);
+        _logHasError = false;
         LaunchBtn.Visibility = Visibility.Collapsed;
         ForceStopBtn.Visibility = Visibility.Visible;
         _userTerminated = false;
@@ -710,8 +763,17 @@ public partial class HomePage : Page
                 instance.Loader ?? "", mods.Count, password, 10, mods, owner, ownerCode);
 
             if (ok)
+            {
                 AppendLog($"[INFO] 房间已发布：房间码 {client.RoomCode}，地址 {client.PublicHost}:{client.DataPort}"
                           + (string.IsNullOrEmpty(password) ? "（公开）" : "（需密码）"));
+                var roomCode = client.RoomCode;
+                if (!string.IsNullOrWhiteSpace(roomCode))
+                {
+                    _ = Dispatcher.BeginInvoke(() => AnimatedMessageBox.ShowCopyable(
+                        $"房间号：{roomCode}\n\n地址：{client.PublicHost}:{client.DataPort}\n\n可复制房间号发给好友。",
+                        "联机房间已开启"));
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -763,6 +825,7 @@ public partial class HomePage : Page
             }
             else if (exitCode != 0)
             {
+                _logHasError = true;
                 SetLaunchState(LaunchUiState.Crashed);
                 ShowCrashDialog();
             }
@@ -770,6 +833,9 @@ public partial class HomePage : Page
             {
                 SetLaunchState(LaunchUiState.Idle);
             }
+
+            if (!_logHasError)
+                SetLogPanelExpanded(false);
         };
         _logTimer.Start();
     }
@@ -935,6 +1001,14 @@ public partial class HomePage : Page
 
         foreach (var text in lines)
         {
+            if (text.StartsWith("[ERR]", StringComparison.Ordinal)
+                || text.StartsWith("[ERROR]", StringComparison.Ordinal))
+            {
+                _logHasError = true;
+                if (LogPanel.Visibility != Visibility.Visible)
+                    SetLogPanelExpanded(true);
+            }
+
             Brush brush;
             if (text.StartsWith("[ERR]") || text.StartsWith("[ERROR]"))
                 brush = Brushes.OrangeRed;
@@ -968,67 +1042,60 @@ public partial class HomePage : Page
         LogBox.Document.Blocks.Clear();
     }
 
-    private void ExpandLog_Click(object sender, RoutedEventArgs e) => SetLogPanelExpanded(true);
+    private void ExpandLog_Click(object sender, RoutedEventArgs e)
+    {
+        LoadStoredGameLogIfEmpty();
+        SetLogPanelExpanded(true);
+    }
 
     private void CollapseLog_Click(object sender, RoutedEventArgs e) => SetLogPanelExpanded(false);
 
-    private void SetLogPanelExpanded(bool expanded, bool animate = true)
+    private void LoadStoredGameLogIfEmpty()
     {
-        var generation = ++_homePanelAnimationGeneration;
-        var visiblePanel = expanded ? (FrameworkElement)LogPanel : AnnouncementPanel;
-        var hiddenPanel = expanded ? (FrameworkElement)AnnouncementPanel : LogPanel;
-        AnnouncementPanel.BeginAnimation(OpacityProperty, null);
-        LogPanel.BeginAnimation(OpacityProperty, null);
-        AnnouncementPanel.RenderTransform = null;
-        LogPanel.RenderTransform = null;
+        if (LogBox.Document.Blocks.Count > 0 || _gameProcess is { HasExited: false }) return;
 
-        if (!animate)
+        if (SelectedInstance is not { } instance)
         {
-            hiddenPanel.Visibility = Visibility.Collapsed;
-            hiddenPanel.Opacity = 1;
-            hiddenPanel.IsHitTestVisible = false;
-            visiblePanel.Visibility = Visibility.Visible;
-            visiblePanel.Opacity = 1;
-            visiblePanel.IsHitTestVisible = true;
+            AppendLog("[INFO] 当前没有选择游戏实例。");
             return;
         }
 
-        const int durationMs = 420;
-        hiddenPanel.Visibility = Visibility.Visible;
-        hiddenPanel.Opacity = 1;
-        hiddenPanel.IsHitTestVisible = false;
-        visiblePanel.Visibility = Visibility.Visible;
-        visiblePanel.Opacity = 0;
-        visiblePanel.IsHitTestVisible = true;
-        Panel.SetZIndex(hiddenPanel, 0);
-        Panel.SetZIndex(visiblePanel, 1);
-
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var transform = new TranslateTransform(expanded ? 18 : -18, 0);
-        visiblePanel.RenderTransform = transform;
-        transform.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(transform.X, 0, TimeSpan.FromMilliseconds(durationMs))
-            {
-                EasingFunction = ease
-            });
-
-        visiblePanel.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(durationMs))
-            {
-                EasingFunction = ease
-            });
-        var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(durationMs));
-        fadeOut.Completed += (_, _) =>
+        try
         {
-            if (generation != _homePanelAnimationGeneration) return;
-            hiddenPanel.Visibility = Visibility.Collapsed;
-            hiddenPanel.BeginAnimation(OpacityProperty, null);
-            hiddenPanel.Opacity = 1;
-            visiblePanel.BeginAnimation(OpacityProperty, null);
-            visiblePanel.Opacity = 1;
-            visiblePanel.RenderTransform = null;
-        };
-        hiddenPanel.BeginAnimation(OpacityProperty, fadeOut);
+            var root = InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
+            var recent = LogAnalyzer.GetRecentLogs(root, 1).FirstOrDefault();
+            if (recent == null)
+            {
+                AppendLog("[INFO] 当前实例还没有生成游戏日志，请先启动一次游戏。");
+                return;
+            }
+
+            var text = LogAnalyzer.ReadText(recent.Path);
+            var lines = text.Replace("\r", "").Split('\n');
+            const int maxLines = 800;
+            var start = Math.Max(0, lines.Length - maxLines);
+            AppendLog($"[INFO] 已加载最近一次游戏日志：{recent.DisplayName}");
+            AppendLogLines(lines[start..].Where(line => line.Length > 0).ToArray());
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"[WARN] 读取历史游戏日志失败：{ex.Message}");
+        }
+    }
+
+    private void SetLogPanelExpanded(bool expanded, bool animate = true)
+    {
+        if (!expanded)
+        {
+            UpdateHomeSurface();
+            return;
+        }
+
+        HomeNoticeCard.Visibility = Visibility.Visible;
+        AnnouncementPanel.Visibility = Visibility.Collapsed;
+        LogPanel.Visibility = Visibility.Visible;
+        LogPanel.Opacity = 1;
+        LogPanel.IsHitTestVisible = true;
     }
 
     private async void AnalyzeLog_Click(object sender, RoutedEventArgs e)
@@ -1041,6 +1108,7 @@ public partial class HomePage : Page
                 return;
             }
 
+            LoadStoredGameLogIfEmpty();
             SetLogPanelExpanded(true);
             var root = InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
             var liveLog = new System.Windows.Documents.TextRange(

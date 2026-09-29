@@ -1,6 +1,7 @@
 #if !FULL_BUILD
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 using QuartzLauncher.Models;
 
 namespace QuartzLauncher.Services;
@@ -16,6 +17,8 @@ public class ThemeManager
 
     private ResourceDictionary? _colorDict;
     private bool _stylesLoaded;
+    private DispatcherTimer? _carouselTimer;
+    private int _carouselSeconds;
 
     public ThemeManager(SettingsService settings)
     {
@@ -56,6 +59,7 @@ public class ThemeManager
         var inputBg = Darken(t.Bg, 5);
         var navActive = Mix(t.Sidebar, t.Primary, 0.16);
         var font = new FontFamily("Microsoft YaHei UI, Segoe UI");
+        var customBackground = ThemeBackgroundService.TryCreateBrush(_settings.Data, t.Bg, isLight);
 
         var rd = new ResourceDictionary
         {
@@ -74,8 +78,8 @@ public class ThemeManager
             ["InputBgBrushColor"] = ToColor(inputBg),
             ["CardShadowColor"] = ToColor(t.CardShadowColor),
 
-            ["BgBrush"] = ToBrush(t.Bg),
-            ["WindowBackgroundBrush"] = ToBrush(t.Bg),
+            ["BgBrush"] = customBackground ?? ToBrush(t.Bg),
+            ["WindowBackgroundBrush"] = customBackground ?? ToBrush(t.Bg),
             ["ContentBackgroundBrush"] = ToBrush(t.Bg),
             ["CardBrush"] = ToBrush(t.Card),
             ["DialogCardBrush"] = ToBrush(t.Card),
@@ -149,6 +153,7 @@ public class ThemeManager
         _colorDict = rd;
         app.Resources.MergedDictionaries.Insert(0, rd);
 
+        SyncCarouselTimer();
         if (_stylesLoaded) return;
         _stylesLoaded = true;
         try
@@ -163,6 +168,49 @@ public class ThemeManager
         }
     }
 
+    /// <summary>
+    /// 只换窗口背景，不重建整套资源字典 —— 轮播每隔几秒切一张时用这个，
+    /// 避免整表重载导致界面闪一下。
+    /// </summary>
+    public void RefreshBackground()
+    {
+        if (_colorDict is null)
+        {
+            Apply();
+            return;
+        }
+
+        var t = Current;
+        var isLight = _settings.Data.ThemeMode == "light";
+        var custom = ThemeBackgroundService.TryCreateBrush(_settings.Data, t.Bg, isLight);
+        _colorDict["BgBrush"] = custom ?? ToBrush(t.Bg);
+        _colorDict["WindowBackgroundBrush"] = custom ?? ToBrush(t.Bg);
+    }
+
+    private void SyncCarouselTimer()
+    {
+        var shouldRun = ThemeBackgroundService.ShouldCarousel(_settings.Data);
+        if (!shouldRun)
+        {
+            _carouselTimer?.Stop();
+            _carouselTimer = null;
+            _carouselSeconds = 0;
+            return;
+        }
+
+        var seconds = Math.Clamp(_settings.Data.ThemeBackgroundCarouselSeconds, 3, 600);
+        if (_carouselTimer is not null && _carouselSeconds == seconds) return;
+        _carouselTimer?.Stop();
+
+        _carouselSeconds = seconds;
+        _carouselTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(seconds)
+        };
+        _carouselTimer.Tick += (_, _) => RefreshBackground();
+        _carouselTimer.Start();
+    }
+
     public void SelectPreset(string name)
     {
         _settings.Data.ThemeName = name;
@@ -174,7 +222,6 @@ public class ThemeManager
         _settings.Data.ThemeSidebar = "";
         _settings.Data.ThemeBorder = "";
         _settings.Data.ThemeDanger = "";
-        _settings.Data.ThemeBackgroundImage = "";
         Apply();
     }
 

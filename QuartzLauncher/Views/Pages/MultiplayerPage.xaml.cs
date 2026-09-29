@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Shapes;
 using QuartzLauncher.Services;
 
 namespace QuartzLauncher.Views.Pages;
@@ -84,9 +85,17 @@ public partial class MultiplayerPage : Page
             // 再去联网恢复登录态、同步云端好友
             try
             {
-                RenderFriendAccount();
-                RenderFriends();
-            }
+        RenderFriendAccount();
+        RenderFriends();
+
+        // 登录态就绪后立刻接上 IM，好友行才能内联显示「最后一条 + 未读」
+        if (_account is { IsLoggedIn: true })
+        {
+            WireIm();
+            _ = _account.RefreshImConversationsAsync();
+        }
+    }
+
             catch
             {
                 // 渲染异常不影响页面显示
@@ -112,7 +121,6 @@ public partial class MultiplayerPage : Page
         ChatView.Visibility = ReferenceEquals(view, ChatView) ? Visibility.Visible : Visibility.Collapsed;
         MyRoomsView.Visibility = ReferenceEquals(view, MyRoomsView) ? Visibility.Visible : Visibility.Collapsed;
         FriendsView.Visibility = ReferenceEquals(view, FriendsView) ? Visibility.Visible : Visibility.Collapsed;
-        ImListView.Visibility = ReferenceEquals(view, ImListView) ? Visibility.Visible : Visibility.Collapsed;
         ImChatView.Visibility = ReferenceEquals(view, ImChatView) ? Visibility.Visible : Visibility.Collapsed;
 
         if (ReferenceEquals(view, ChatView))
@@ -957,6 +965,10 @@ public partial class MultiplayerPage : Page
     private readonly System.Collections.Generic.Dictionary<string, int> _imUnreadByPeer
         = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>按好友编码缓存的会话摘要，好友行直接内联显示「最后一条 + 时间 + 未读」。</summary>
+    private readonly System.Collections.Generic.Dictionary<string, ImConversation> _imConversations
+        = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>IM 相关事件只订阅一次。</summary>
     private bool _imWired;
 
@@ -968,7 +980,7 @@ public partial class MultiplayerPage : Page
 
         account.ImMessageReceived += message => Dispatcher.BeginInvoke(() => OnImMessage(message));
         account.ImMessageAcked += message => Dispatcher.BeginInvoke(() => OnImAcked(message));
-        account.ImConversationsChanged += list => Dispatcher.BeginInvoke(() => RenderImSessions(list));
+        account.ImConversationsChanged += list => Dispatcher.BeginInvoke(() => OnImConversations(list));
         account.ImMessageRecalled += (conv, id) => Dispatcher.BeginInvoke(() => OnImRecalled(conv, id));
         account.ImHistoryLoaded += (conv, messages) => Dispatcher.BeginInvoke(() => OnImHistory(conv, messages));
         account.ImError += text => Dispatcher.BeginInvoke(() =>
@@ -994,65 +1006,29 @@ public partial class MultiplayerPage : Page
             : "还没有聊天记录";
     }
 
-    /// <summary>好友页的「IM 消息」入口。</summary>
-    private void ImEntry_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 会话摘要到达：缓存起来并同步未读。
+    /// 显示由好友行内联完成，这里只管数据，不再单独画一个会话列表页。
+    /// </summary>
+    private void OnImConversations(IReadOnlyList<ImConversation> sessions)
     {
-        var account = _account;
-        if (account == null || !account.IsLoggedIn)
+        _imConversations.Clear();
+        var pending = 0;
+        foreach (var session in sessions)
         {
-            if (FriendsView.Visibility == Visibility.Visible) FriendStatusText.Text = "请先登录账号再使用 IM";
-            return;
+            if (string.IsNullOrEmpty(session.Peer)) continue;
+            _imConversations[session.Peer] = session;
+            pending += session.Unread;
         }
 
-        WireIm();
-        _imLog.Clear();
-        ShowView(ImListView);
-        ImListStatus.Text = "正在拉取会话…";
-        _ = account.RefreshImConversationsAsync();
-    }
-
-    private void ImListBack_Click(object sender, RoutedEventArgs e) => ShowView(FriendsView);
-
-    private async void ImRefresh_Click(object sender, RoutedEventArgs e)
-    {
-        ImListStatus.Text = "正在拉取会话…";
-        if (_account == null || !await _account.RefreshImConversationsAsync())
-            ImListStatus.Text = "连接不可用，请稍后再试";
-    }
-
-    /// <summary>重画会话列表：对方名字 + 最后一条 + 未读红点。</summary>
-    private void RenderImSessions(IReadOnlyList<ImConversation> sessions)
-    {
-        ImSessionList.Children.Clear();
-        if (sessions.Count == 0)
-        {
-            var empty = new TextBlock
-            {
-                Text = "还没有聊天记录。和好友聊一句就会出现在这里。",
-                FontSize = 12,
-                Margin = new Thickness(8, 20, 0, 0),
-                TextWrapping = TextWrapping.Wrap
-            };
-            empty.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
-            ImSessionList.Children.Add(empty);
-            ImListStatus.Text = "只支持和好友聊天；对方不在线时消息会留在服务器，上线自动补发。";
-            return;
-        }
-
-        var pending = sessions.Sum(s => s.Unread);
         if (pending != _lastPendingImUnread)
         {
             _lastPendingImUnread = pending;
             SyncImUnread(sessions);
         }
 
-        foreach (var session in sessions)
-        {
-            ImSessionList.Children.Add(BuildImSessionRow(session));
-        }
-
-        ImListStatus.Text = $"共 {sessions.Count} 个会话"
-                           + (_account?.Im is { IsConnected: true } ? " · 已连接" : " · 未连接，发送会自动重试");
+        // 好友行内联显示最后一条，摘要变了就得重画
+        if (FriendsView.Visibility == Visibility.Visible) RenderFriends();
     }
 
     /// <summary>服务端给的未读数是权威值，同步到红点。</summary>
@@ -1066,76 +1042,22 @@ public partial class MultiplayerPage : Page
         RecomputeUnread();
     }
 
-    private UIElement BuildImSessionRow(ImConversation session)
+    /// <summary>取某个好友的会话摘要；没聊过返回 null（好友行就退回显示编码和在线状态）。</summary>
+    private ImConversation? ConversationOf(string code)
     {
-        var myCode = _account?.Code ?? "";
-        var name = FriendNameOf(session.Peer);
+        if (string.IsNullOrEmpty(code)) return null;
+        return _imConversations.TryGetValue(code, out var session) ? session : null;
+    }
 
-        var row = new Border
-        {
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0, 0, 0, 6),
-            CornerRadius = new CornerRadius(8),
-            Cursor = System.Windows.Input.Cursors.Hand
-        };
-        row.SetResourceReference(Border.BackgroundProperty, "DialogCardBrush");
-        row.MouseLeftButtonUp += (_, _) => OpenImChat(session.Peer, name);
-
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var left = new StackPanel();
-        left.Children.Add(new TextBlock
-        {
-            Text = string.IsNullOrEmpty(name) ? session.Peer : name,
-            FontSize = 13,
-            FontWeight = FontWeights.SemiBold
-        });
-
-        var preview = new TextBlock
-        {
-            Text = string.IsNullOrEmpty(session.LastMessage)
-                ? (session.Blocked ? "已解除好友关系" : "暂无消息")
-                : ImEmoji.Parse(session.LastMessage),
-            FontSize = 11,
-            Margin = new Thickness(0, 3, 0, 0),
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = 360
-        };
-        preview.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
-        left.Children.Add(preview);
-        Grid.SetColumn(left, 0);
-        grid.Children.Add(left);
-
-        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
-        var time = new TextBlock { Text = session.TimeText, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Right };
-        time.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
-        right.Children.Add(time);
-
-        if (session.Unread > 0)
-        {
-            var badge = new Border
-            {
-                CornerRadius = new CornerRadius(9),
-                Padding = new Thickness(6, 1, 6, 1),
-                Margin = new Thickness(0, 4, 0, 0),
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Background = (Brush)FindResource("DangerBrush"),
-                Child = new TextBlock
-                {
-                    Text = session.Unread > 99 ? "99+" : session.Unread.ToString(),
-                    FontSize = 10,
-                    Foreground = Brushes.White
-                }
-            };
-            right.Children.Add(badge);
-        }
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
-
-        row.Child = grid;
-        return row;
+    /// <summary>好友行里那条「最后一条消息」：没消息时给一句说明，有消息时解析表情并省略。</summary>
+    private static string ImPreviewText(ImConversation session)
+    {
+        if (string.IsNullOrEmpty(session.LastMessage))
+            return session.Blocked ? "已解除好友关系" : "点此开始聊天";
+        // 图片消息的正文是 data URL，绝不能当文字显示出来
+        if (session.LastMessage.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return "[图片]";
+        return ImEmoji.Parse(session.LastMessage);
     }
 
     /// <summary>按编码在好友列表里查名字（查不到就显示编码本身）。</summary>
@@ -1177,7 +1099,9 @@ public partial class MultiplayerPage : Page
         if (account == null) return;
 
         _imPeer = code;
-        _imPeerName = string.IsNullOrWhiteSpace(name) ? code : name;
+        // 名字可能没传（比如从用户卡片点进来），回好友列表里补一下
+        _imPeerName = string.IsNullOrWhiteSpace(name) ? FriendNameOf(code) : name;
+        if (string.IsNullOrWhiteSpace(_imPeerName)) _imPeerName = code;
         ImChatTitle.Text = _imPeerName;
         ImChatPeer.Text = code == _imPeerName ? "" : code;
         ImChatStatus.Text = "正在加载聊天记录…";
@@ -1190,7 +1114,14 @@ public partial class MultiplayerPage : Page
         // 打开就算已读：服务端落盘，重连不会重复补发
         var conv = ImClient.ConvId(account.Code, code);
         _ = account.MarkImReadAsync(conv);
-        if (_imUnreadByPeer.Remove(code)) RecomputeUnread();
+        if (_imUnreadByPeer.Remove(code))
+        {
+            RecomputeUnread();
+            // 好友行上的未读红点要跟着消失
+            if (_imConversations.TryGetValue(code, out var opened))
+                _imConversations[code] = opened with { Unread = 0 };
+            if (FriendsView.Visibility == Visibility.Visible) RenderFriends();
+        }
     }
 
     private void RenderImChat()
@@ -1213,6 +1144,10 @@ public partial class MultiplayerPage : Page
 
         var mineBubble = new SolidColorBrush(Color.FromRgb(0x9C, 0xDD, 0xFF));
         mineBubble.Freeze();
+        var otherBubble = new SolidColorBrush(Color.FromRgb(0xF2, 0xF5, 0xF8));
+        otherBubble.Freeze();
+        var otherBubbleBorder = new SolidColorBrush(Color.FromRgb(0xD8, 0xE0, 0xE8));
+        otherBubbleBorder.Freeze();
 
         var line = new StackPanel
         {
@@ -1223,11 +1158,48 @@ public partial class MultiplayerPage : Page
 
         var bubble = new Border
         {
-            CornerRadius = new CornerRadius(10),
+            CornerRadius = new CornerRadius(12),
             Padding = new Thickness(14, 9, 14, 9),
             MaxWidth = 520,
             Background = isMine ? mineBubble : (Brush)FindResource("DialogCardBrush")
         };
+        if (!isMine)
+        {
+            bubble.Background = otherBubble;
+            bubble.BorderBrush = otherBubbleBorder;
+            bubble.BorderThickness = new Thickness(1);
+        }
+
+        // QQ 风格气泡尾巴：对方在左下角，我方在右下角。
+        // 尾巴和气泡共用同一画刷，避免图片/长文本时出现断层。
+        var bubbleWrap = new Grid { MaxWidth = 532 };
+        bubbleWrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bubbleWrap.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var tail = new Polygon
+        {
+            Points = isMine
+                ? new PointCollection(new[] { new Point(0, 0), new Point(12, 9), new Point(0, 18) })
+                : new PointCollection(new[] { new Point(12, 0), new Point(0, 9), new Point(12, 18) }),
+            Width = 12,
+            Height = 18,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, 0, 10),
+            Fill = isMine ? mineBubble : otherBubble
+        };
+        if (isMine)
+        {
+            Grid.SetColumn(bubble, 0);
+            Grid.SetColumn(tail, 1);
+        }
+        else
+        {
+            Grid.SetColumn(tail, 0);
+            Grid.SetColumn(bubble, 1);
+        }
+        Panel.SetZIndex(tail, 1);
+        bubbleWrap.Children.Add(tail);
+        bubbleWrap.Children.Add(bubble);
 
         var content = new StackPanel();
 
@@ -1236,7 +1208,7 @@ public partial class MultiplayerPage : Page
             var tip = new TextBlock { Text = isMine ? "你撤回了一条消息" : "对方撤回了一条消息", FontSize = 12, Opacity = 0.7 };
             tip.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
             bubble.Child = tip;
-            line.Children.Add(bubble);
+            line.Children.Add(bubbleWrap);
             return line;
         }
 
@@ -1294,7 +1266,7 @@ public partial class MultiplayerPage : Page
         bubble.ContextMenu = menu;
         bubble.MouseRightButtonUp += (_, args) => args.Handled = true;
 
-        line.Children.Add(bubble);
+        line.Children.Add(bubbleWrap);
         return line;
     }
 
@@ -1358,6 +1330,8 @@ public partial class MultiplayerPage : Page
             RenderImChat();
             _ = account.MarkImReadAsync(conv);
             if (_imUnreadByPeer.Remove(peer)) RecomputeUnread();
+            // 好友行内联显示最后一条，回到好友页要看到这条
+            _ = account.RefreshImConversationsAsync();
             return;
         }
 
@@ -1393,6 +1367,8 @@ public partial class MultiplayerPage : Page
         if (index < 0) return;
         _imLog[index] = _imLog[index] with { Recalled = true };
         if (ImChatView.Visibility == Visibility.Visible) RenderImChat();
+        // 撤回后好友行的摘要也得跟着变（服务端会重新下发）
+        _ = _account?.RefreshImConversationsAsync();
     }
 
     private string _imFailedText = "";
@@ -1530,7 +1506,8 @@ public partial class MultiplayerPage : Page
     private void ImChatBack_Click(object sender, RoutedEventArgs e)
     {
         _imPeer = "";
-        ShowView(ImListView);
+        ShowView(FriendsView);
+        RenderFriends();
         _ = _account?.RefreshImConversationsAsync();
     }
 
@@ -1668,6 +1645,10 @@ public partial class MultiplayerPage : Page
         await _account.RefreshFriendsAsync();
         RenderFriendAccount();
         RenderFriends();
+
+        // 摘要和好友一起同步，好友行的最后一条消息才不会停在旧值
+        WireIm();
+        await _account.RefreshImConversationsAsync();
     }
 
     private async void RefreshFriends_Click(object sender, RoutedEventArgs e)
@@ -1675,6 +1656,31 @@ public partial class MultiplayerPage : Page
         FriendStatusText.Text = "正在刷新…";
         await EnsureAccountAsync();
         FriendStatusText.Text = $"已刷新，共 {_account?.Friends.Count ?? 0} 位好友";
+    }
+
+    /// <summary>
+    /// 好友行外面套一层带边框的卡片。
+    /// Grid 自身没有背景，空白处点不到，所以整行可点必须由这个有背景的 Border 承担。
+    /// 行内按钮自己会把手势吃掉，不会误触发进聊天。
+    /// </summary>
+    private Border BuildFriendCard(UIElement row, string friendCode, string friendName)
+    {
+        var card = new Border
+        {
+            Child = row,
+            Padding = new Thickness(10, 8, 10, 8),
+            Margin = new Thickness(4, 3, 4, 3),
+            BorderThickness = new Thickness(1),
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "点击任意位置开始私聊"
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "CardSurfaceBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, "BorderBrush");
+        card.SetResourceReference(Border.CornerRadiusProperty, "CardCornerRadius");
+        HoverAnimationBehavior.SetHoverScale(card, 1.006);
+
+        card.MouseLeftButtonUp += (_, _) => OpenFriendChat(friendCode, friendName);
+        return card;
     }
 
     private void AddFriendHintText(string text)
@@ -1723,15 +1729,13 @@ public partial class MultiplayerPage : Page
             {
                 var online = friend.Online;   // 在线状态由中继按心跳判定
 
+                // 外边距和内边距由 BuildFriendCard 的卡片负责，这里不再重复留白
                 var row = new Grid
                 {
-                    Margin = new Thickness(4, 6, 4, 6),
-                    Cursor = System.Windows.Input.Cursors.Hand,
-                    ToolTip = "点击开始聊天"
+                    Cursor = System.Windows.Input.Cursors.Hand
                 };
                 var friendCode = friend.Code;
                 var friendName = friend.Name;
-                row.MouseLeftButtonUp += (_, _) => OpenFriendChat(friendCode, friendName);
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1743,19 +1747,59 @@ public partial class MultiplayerPage : Page
                 row.Children.Add(avatar);
 
                 var info = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
+
+                // 名字行：未读数直接挂在名字后面，不用再点进单独的会话列表
+                var session = ConversationOf(friend.Code);
+                var unread = session?.Unread ?? 0;
+                var nameRow = new StackPanel { Orientation = Orientation.Horizontal };
                 var nameText = new TextBlock
                 {
                     Text = string.IsNullOrWhiteSpace(friend.Name) ? "(未知玩家)" : friend.Name,
                     FontSize = 14,
-                    FontWeight = FontWeights.SemiBold
+                    FontWeight = FontWeights.SemiBold,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 320
                 };
                 nameText.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
-                info.Children.Add(nameText);
+                nameRow.Children.Add(nameText);
+
+                if (unread > 0)
+                {
+                    var badge = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(5, 0, 5, 1),
+                        Margin = new Thickness(8, 1, 0, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Background = (Brush)FindResource("DangerBrush"),
+                        Child = new TextBlock
+                        {
+                            Text = unread > 99 ? "99+" : unread.ToString(),
+                            FontSize = 10,
+                            Foreground = Brushes.White
+                        }
+                    };
+                    nameRow.Children.Add(badge);
+                }
+                info.Children.Add(nameRow);
+
+                var preview = new TextBlock
+                {
+                    Text = session == null ? "点此开始聊天" : ImPreviewText(session),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 3, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = 420
+                };
+                preview.SetResourceReference(TextBlock.ForegroundProperty,
+                    unread > 0 ? "TextBrush" : "TextMutedBrush");
+                info.Children.Add(preview);
 
                 var state = new TextBlock
                 {
                     Text = $"编码 {friend.Code} · {(online ? "在线" : "离线")}",
-                    FontSize = 11
+                    FontSize = 11,
+                    Margin = new Thickness(0, 3, 0, 0)
                 };
                 state.SetResourceReference(TextBlock.ForegroundProperty, online ? "SuccessBrush" : "TextMutedBrush");
                 info.Children.Add(state);
@@ -1817,10 +1861,30 @@ public partial class MultiplayerPage : Page
                 };
                 buttons.Children.Add(removeBtn);
 
-                Grid.SetColumn(buttons, 2);
-                row.Children.Add(buttons);
+                // 右列：最后一条的时间压在按钮上方
+                var right = new StackPanel
+                {
+                    Orientation = Orientation.Vertical,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                if (session != null && !string.IsNullOrEmpty(session.TimeText))
+                {
+                    var time = new TextBlock
+                    {
+                        Text = session.TimeText,
+                        FontSize = 10,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Margin = new Thickness(0, 0, 0, 4)
+                    };
+                    time.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+                    right.Children.Add(time);
+                }
+                right.Children.Add(buttons);
+                Grid.SetColumn(right, 2);
+                row.Children.Add(right);
 
-                FriendList.Children.Add(row);
+                FriendList.Children.Add(BuildFriendCard(row, friendCode, friendName));
             }
             return;
         }
@@ -1849,7 +1913,7 @@ public partial class MultiplayerPage : Page
         {
             var online = _chat?.IsOnline(friend.Name) == true;
 
-            var row = new Grid { Margin = new Thickness(4, 6, 4, 6) };
+            var row = new Grid { Cursor = System.Windows.Input.Cursors.Hand };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -1895,7 +1959,8 @@ public partial class MultiplayerPage : Page
             Grid.SetColumn(removeBtn, 2);
             row.Children.Add(removeBtn);
 
-            FriendList.Children.Add(row);
+            // 未登录时点整行也会走 OpenFriendChat，由它提示先登录
+            FriendList.Children.Add(BuildFriendCard(row, "", friend.Name));
         }
     }
 
