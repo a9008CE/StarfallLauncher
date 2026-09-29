@@ -13,6 +13,13 @@ Launcher/
 # ===== 官网（不参与开源）=====
 website/
 
+# ===== 闭源模块与运维记录（切勿提交）=====
+Private/
+HANDOFF*.md
+*.pfx
+*.key
+*_deploy-cf/
+
 # ===== IDE / 系统 =====
 .vs/
 .idea/
