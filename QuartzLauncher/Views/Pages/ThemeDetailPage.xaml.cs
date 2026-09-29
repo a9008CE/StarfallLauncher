@@ -405,6 +405,61 @@ public partial class ThemeDetailPage : Page
         }
     }
 
+    private async void SyncPresets_Click(object sender, RoutedEventArgs e)
+    {
+        var button = (Button)sender;
+        var original = button.Content;
+        button.IsEnabled = false;
+        button.Content = "下载中…";
+        try
+        {
+            var result = await PresetLibraryService.SyncAsync(force: true);
+            RefreshCustomBackgroundControls();
+            button.Content = result.Status switch
+            {
+                PresetSyncStatus.Success when result.Fetched > 0 => $"已更新 {result.Fetched} 张",
+                PresetSyncStatus.Success => "已是最新",
+                _ => "下载失败",
+            };
+            ShowSyncProblem(result);
+        }
+        catch (Exception ex)
+        {
+            button.Content = "下载失败";
+            MessageBox.Show($"下载失败：{ex.Message}", "下载官方预设图",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            button.IsEnabled = true;
+            var restore = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            restore.Tick += (_, _) =>
+            {
+                restore.Stop();
+                button.Content = original;
+            };
+            restore.Start();
+        }
+    }
+
+    private static void ShowSyncProblem(PresetSyncResult result)
+    {
+        string? text = result.Status switch
+        {
+            PresetSyncStatus.Failed => string.IsNullOrWhiteSpace(result.Message)
+                ? "无法连接到预设图库，请检查网络后重试。"
+                : $"无法连接到预设图库，请检查网络后重试。\n\n详细信息：{result.Message}",
+            PresetSyncStatus.Busy => "已有同步任务在进行中，请稍后再试。",
+            PresetSyncStatus.Unsupported => "当前版本不包含官方预设图库功能。",
+            PresetSyncStatus.Success when result.FailedCount > 0 =>
+                $"已更新 {result.Fetched} 张，但有 {result.FailedCount} 张下载失败，可稍后重试。",
+            _ => null,
+        };
+        if (text is null) return;
+        MessageBox.Show(text, "下载官方预设图", MessageBoxButton.OK,
+            result.Status == PresetSyncStatus.Failed ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+
     private void ChooseBackground_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog

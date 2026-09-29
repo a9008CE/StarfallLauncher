@@ -31,6 +31,10 @@
                                     Margin="24,0,0,0">
                             <Button Content="打开图库目录" Style="{DynamicResource BtnBase}" Padding="12,6"
                                     Click="OpenBackgroundFolder_Click"/>
+                            <Button x:Name="SyncPresetsButton" Content="下载官方预设图"
+                                    Style="{DynamicResource BtnBase}" Padding="12,6" Margin="8,0,0,0"
+                                    ToolTip="从 starfallmc.top 拉取官方预设图库到图库目录"
+                                    Click="SyncPresets_Click"/>
                             <Button x:Name="ChooseBackgroundButton" Content="选择图片"
                                     Style="{DynamicResource BtnBase}" Padding="12,6" Margin="8,0,0,0"
                                     Click="ChooseBackground_Click"/>

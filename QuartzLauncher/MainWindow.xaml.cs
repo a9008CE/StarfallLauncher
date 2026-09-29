@@ -129,6 +129,7 @@ public partial class MainWindow : Window
 
         _ = FetchQuoteAsync();
         ScheduleNextQuote();
+        PresetLibraryService.SyncOnStartup();
 
         DownloadManager.Instance.TaskCompleted += (_, task) =>
             Dispatcher.BeginInvoke(() =>
