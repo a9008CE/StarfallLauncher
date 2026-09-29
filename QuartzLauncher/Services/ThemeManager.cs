@@ -102,6 +102,11 @@ public class ThemeManager
             ["GlassBorderBrush"] = ToBrush(t.Border),
             ["GlassHighlightBrush"] = Brushes.Transparent,
 
+            ["GuideDimBrush"] = new SolidColorBrush(
+                _settings.Data.ThemeMode == "light"
+                    ? Color.FromArgb(150, 12, 16, 26)
+                    : Color.FromArgb(188, 4, 6, 12)),
+
             ["PrimaryButtonForeground"] = Brushes.White,
             ["DangerButtonForeground"] = Brushes.White,
 

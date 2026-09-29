@@ -82,6 +82,14 @@ public class Settings
     public bool TearRandomDirection { get; set; } = true;
     public string TearDirection { get; set; } = "vertical";
     public List<WebsiteShortcut> WebsiteShortcuts { get; set; } = new();
+
+    /// <summary>
+    /// 新手教程是否已看过（看完或跳过后置 true，之后永不再弹）。
+    /// 默认给 true：老配置里根本没有这个字段，反序列化后保留默认值，
+    /// 升级上来的用户不会被教程打扰；只有真正的新装目录才会由
+    /// <see cref="Services.SettingsService.Load"/> 显式改成 false。
+    /// </summary>
+    public bool OnboardingCompleted { get; set; } = true;
 }
 
 public static class VersionIsolationModes

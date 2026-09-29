@@ -41,6 +41,13 @@ public partial class MainWindow : Window
     private HomePage? _homePage;
     private VersionsPage? _versionsPage;
     private SettingsPage? _settingsPage;
+
+    /// <summary>当前正在运行的主窗口实例，供新手引导定位控件。</summary>
+    public static MainWindow? Current;
+
+    /// <summary>侧栏入口（首页/版本库/服务器/联机大厅/资源中心/设置/帮助/更多功能）。</summary>
+    public static List<FrameworkElement> NavStackItems =>
+        Current?.NavStack.Children.OfType<FrameworkElement>().ToList() ?? [];
     private ServerBrowserPage? _serverBrowserPage;
     private MorePage? _morePage;
     private HelpPage? _helpPage;
@@ -69,6 +76,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Current = this;
         SourceInitialized += (_, _) =>
         {
             ApplyRoundedWindowCorners();
@@ -309,6 +317,26 @@ public partial class MainWindow : Window
         catch
         {
             // 离线/中继不可达时不打扰用户
+        }
+
+        // 新手教程：只在「配置目录还没有 settings.json」的首次启动出现。
+        // 用 ApplicationIdle 排队，等开屏动画走完再弹，不打断启动过程。
+        // 落盘由 FirstRunGuide 在关闭时自己完成，这里不要提前写。
+        if (Views.FirstRunGuide.ShouldShow())
+        {
+            _ = Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+            {
+                try
+                {
+                    Views.FirstRunGuide.Show(this);
+                }
+                catch
+                {
+                    // 教程弹不出来也不能影响启动
+                    App.Settings.Data.OnboardingCompleted = true;
+                    App.Settings.Save();
+                }
+            }));
         }
 
         // 每运行 4 小时弹出一次编码确认（未登录则跳过；必须输对编码才能关闭）

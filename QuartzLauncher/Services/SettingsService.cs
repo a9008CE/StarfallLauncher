@@ -19,8 +19,9 @@ public class SettingsService
     {
         if (!File.Exists(paths.ConfigFile))
         {
+            // 全新安装：这是唯一会看到新手教程的情况
             var javaPath = FindJava();
-            return new SettingsService(paths, new Settings { JavaPath = javaPath });
+            return new SettingsService(paths, new Settings { JavaPath = javaPath, OnboardingCompleted = false });
         }
         try
         {
