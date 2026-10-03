@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace QuartzLauncher.Models;
@@ -66,9 +67,75 @@ public class InstanceStore
     {
         var root = Path.Combine(_instancesDir, instance.Id);
         Directory.CreateDirectory(root);
-        var json = JsonConvert.SerializeObject(instance, Formatting.Indented);
-        File.WriteAllText(Path.Combine(root, "instance.json"), json);
+        WriteMetadata(root, instance);
         return root;
+    }
+
+    /// <summary>
+    /// 以临时文件 + 原子替换写入实例元数据。
+    /// 整合包导入完成前会先把元数据写进临时目录，再整体移动到 instances，
+    /// 避免留下“游戏文件已存在但 instance.json 没写完”的半成品实例。
+    /// </summary>
+    public static void WriteMetadata(string instanceRoot, Instance instance)
+    {
+        Directory.CreateDirectory(instanceRoot);
+        var target = Path.Combine(instanceRoot, "instance.json");
+        var temporary = Path.Combine(instanceRoot, $".instance-{Guid.NewGuid():N}.tmp");
+        var json = JsonConvert.SerializeObject(instance, Formatting.Indented);
+
+        try
+        {
+            using (var stream = new FileStream(
+                       temporary,
+                       FileMode.CreateNew,
+                       FileAccess.Write,
+                       FileShare.None,
+                       4096,
+                       FileOptions.WriteThrough))
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(false), 4096, leaveOpen: true))
+            {
+                writer.Write(json);
+                writer.Flush();
+                stream.Flush(true);
+            }
+
+            if (File.Exists(target))
+            {
+                try
+                {
+                    File.Replace(temporary, target, null);
+                }
+                catch (PlatformNotSupportedException)
+                {
+                    File.Move(temporary, target, true);
+                }
+                catch (IOException)
+                {
+                    // 某些文件系统不支持 ReplaceFile，仍使用同目录覆盖移动。
+                    File.Move(temporary, target, true);
+                }
+            }
+            else
+            {
+                File.Move(temporary, target);
+            }
+
+            // 写入后立即回读校验，避免磁盘/杀毒软件占用导致启动器显示假成功。
+            var written = JsonConvert.DeserializeObject<Instance>(File.ReadAllText(target));
+            if (written == null || !string.Equals(written.Id, instance.Id, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("实例元数据写入校验失败。");
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(temporary)) File.Delete(temporary);
+            }
+            catch
+            {
+                // 下次扫描会忽略临时文件，不影响已完成的实例。
+            }
+        }
     }
 
     public void Delete(string instanceId)

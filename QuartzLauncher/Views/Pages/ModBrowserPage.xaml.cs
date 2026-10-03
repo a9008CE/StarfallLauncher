@@ -45,6 +45,9 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
     private int _totalCount;
     private int _perPage = 24;
     private CategoryDef? _selectedCategory;
+
+    private readonly record struct PopularSourceResult(List<ModItem> Items, int Total, bool Available);
+    private readonly record struct SearchSourceResult(List<ModItem> Items, bool Available);
     private static readonly CategoryDef[] ModCategories =
     [
         new("全部", "", ""),
@@ -309,6 +312,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         SearchButton.IsEnabled = true;
         HintText.BeginAnimation(OpacityProperty, null);
         HintText.Opacity = 1;
+        HideEmptyState();
         _selectedMod = null;
         _detailAnimationGeneration++;
         return ++_contentRequestGeneration;
@@ -346,6 +350,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         {
             List<ModItem> mods;
             int totalNow;
+            var anySourceAvailable = false;
             var src = App.Settings.Data.ModDownloadSource;
             var isMixed = src is "mixed" or "all";
 
@@ -354,7 +359,16 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
                             && ParseSource(src) == ModSource.MCmod;
             if (mcmodOnly)
             {
-                mods = await McmodService.GetPopularModsAsync(_perPage);
+                try
+                {
+                    mods = await McmodService.GetPopularModsAsync(_perPage)
+                        .WaitAsync(TimeSpan.FromSeconds(12));
+                    anySourceAvailable = true;
+                }
+                catch
+                {
+                    mods = new();
+                }
                 ApplyChineseNames(mods, mods);
                 totalNow = mods.Count;
             }
@@ -372,16 +386,34 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
                     .ToList();
                 var results = await Task.WhenAll(tasks);
                 mods = results.SelectMany(r => r.Items).ToList();
-                totalNow = results.Max(r => r.Total);
+                anySourceAvailable = results.Any(r => r.Available);
+                totalNow = results.Where(r => r.Available).Select(r => r.Total).DefaultIfEmpty(0).Max();
 
                 if (mode == ResourceMode.Mods)
                 {
-                    var mcmodMatches = await McmodService.GetPopularModsAsync(60);
-                    ApplyChineseNames(mods, mcmodMatches);
+                    try
+                    {
+                        var mcmodMatches = await McmodService.GetPopularModsAsync(60)
+                            .WaitAsync(TimeSpan.FromSeconds(12));
+                        ApplyChineseNames(mods, mcmodMatches);
+                    }
+                    catch
+                    {
+                        // MCmod 仅用于补充中文名，失败不影响主资源源的结果。
+                    }
                 }
             }
 
             if (!IsCurrentContentRequest(generation)) return;
+            if (!anySourceAvailable)
+            {
+                _currentMods.Clear();
+                _totalCount = 0;
+                ShowEmptyState("资源暂时无法加载", "网络连接不稳定，资源服务暂时没有响应。请检查网络后重试。", true);
+                HintText.Text = "";
+                return;
+            }
+
             _currentMods = mods
                 .GroupBy(mod => $"{mod.Source}:{mod.Id}", StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First())
@@ -392,6 +424,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
             if (_currentMods.Count > 0)
             {
+                HideEmptyState();
                 HintText.Text = "";
                 CountText.Text = $"{GetModeTitle(mode)}精选 · 共 {_totalCount} 个";
                 CountText.Visibility = Visibility.Visible;
@@ -402,13 +435,17 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             }
             else
             {
-                HintText.Text = $"输入关键词搜索{GetModeTitle(mode)}";
+                HideEmptyState();
+                HintText.Text = $"暂无可用的{GetModeTitle(mode)}资源";
             }
         }
-        catch (Exception ex)
+        catch
         {
             if (IsCurrentContentRequest(generation))
-                HintText.Text = $"加载{GetModeTitle(mode)}失败: {ex.Message}";
+            {
+                ShowEmptyState("资源加载失败", "网络连接不稳定，请检查网络后重试。", true);
+                HintText.Text = "";
+            }
         }
         finally
         {
@@ -423,14 +460,14 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         }
     }
 
-    private static async Task<(List<ModItem> Items, int Total)> SafePopularPage(
+    private static async Task<PopularSourceResult> SafePopularPage(
         ModSource source, ResourceMode mode, string mrCategory, string cfCategory, string? gameVersion, int offset, int count)
     {
         var cacheKey = $"{source}|{mode}|{mrCategory}|{cfCategory}|{gameVersion}|{offset}|{count}";
         lock (PopularCacheLock)
         {
             if (PopularCache.TryGetValue(cacheKey, out var cached) && cached.Expires > DateTime.UtcNow)
-                return (cached.Items, cached.Total);
+                return new PopularSourceResult(cached.Items, cached.Total, true);
         }
 
         try
@@ -446,11 +483,11 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             var result = await request.WaitAsync(TimeSpan.FromSeconds(12));
             lock (PopularCacheLock)
                 PopularCache[cacheKey] = (DateTime.UtcNow.AddMinutes(5), result.Item1, result.Item2);
-            return result;
+            return new PopularSourceResult(result.Item1, result.Item2, true);
         }
         catch
         {
-            return (new(), 0);
+            return new PopularSourceResult(new(), 0, false);
         }
     }
 
@@ -599,10 +636,13 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             if (!IsCurrentContentRequest(generation)) return;
             AnimateResultsIn();
         }
-        catch (Exception ex)
+        catch
         {
             if (IsCurrentContentRequest(generation))
-                HintText.Text = $"加载{GetModeTitle(mode)}失败: {ex.Message}";
+            {
+                ShowEmptyState("加载失败", "网络连接不稳定，请检查网络后重试。", true);
+                HintText.Text = "";
+            }
         }
         finally
         {
@@ -662,6 +702,31 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
             Search_Click(sender, e);
     }
 
+    private void ShowEmptyState(string title, string message, bool canRetry)
+    {
+        EmptyStateTitle.Text = title;
+        EmptyStateMessage.Text = message;
+        EmptyStateRetryButton.Visibility = canRetry ? Visibility.Visible : Visibility.Collapsed;
+        EmptyStateCard.Visibility = Visibility.Visible;
+    }
+
+    private void HideEmptyState()
+    {
+        EmptyStateCard.Visibility = Visibility.Collapsed;
+    }
+
+    private async void EmptyStateRetry_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(SearchBox.Text.Trim()))
+        {
+            Search_Click(sender, e);
+            return;
+        }
+
+        var generation = BeginContentRequest();
+        await LoadPopularMods(generation);
+    }
+
     private async void Search_Click(object sender, RoutedEventArgs e)
     {
         var keyword = SearchBox.Text.Trim();
@@ -693,29 +758,52 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
                 var sources = GetSelectedSources();
                 var tasks = sources.Select(s =>
                     SearchSafe(s, keyword, version, loader, mode)).ToList();
+                var hasExtraMcmodSearch = false;
 
                 if (mode == ResourceMode.Mods && !sources.Contains(ModSource.MCmod))
+                {
                     tasks.Add(SearchSafe(ModSource.MCmod, keyword, version, loader, mode));
+                    hasExtraMcmodSearch = true;
+                }
 
                 var results = await System.Threading.Tasks.Task.WhenAll(tasks);
-                _currentMods = results.SelectMany(r => r).ToList();
+                var anySourceAvailable = results.Any(r => r.Available);
+                _currentMods = results.SelectMany(r => r.Items).ToList();
 
-                if (mode == ResourceMode.Mods && !sources.Contains(ModSource.MCmod) && results.Length > sources.Count)
-                    mcmodMatches = results[^1];
+                if (mode == ResourceMode.Mods && hasExtraMcmodSearch)
+                    mcmodMatches = results[^1].Items;
                 else
                     mcmodMatches = new List<ModItem>();
+
+                if (!anySourceAvailable)
+                {
+                    _currentMods.Clear();
+                    ShowEmptyState("搜索暂时不可用", "网络连接不稳定，资源服务暂时没有响应。请检查网络后重试。", true);
+                }
             }
             else
             {
                 var source = ParseSource(src);
                 if (mode != ResourceMode.Mods && source == ModSource.MCmod)
                     source = ModSource.Modrinth;
-                _currentMods = await SearchSafe(source, keyword, version, loader, mode);
-                mcmodMatches = mode == ResourceMode.Mods && source == ModSource.MCmod
-                    ? _currentMods
-                    : mode == ResourceMode.Mods
-                        ? await SearchSafe(ModSource.MCmod, keyword, null, null, mode)
-                        : new List<ModItem>();
+                var primaryResult = await SearchSafe(source, keyword, version, loader, mode);
+                _currentMods = primaryResult.Items;
+                mcmodMatches = new List<ModItem>();
+                if (mode == ResourceMode.Mods && source == ModSource.MCmod)
+                {
+                    mcmodMatches = _currentMods;
+                }
+                else if (mode == ResourceMode.Mods)
+                {
+                    var mcmodResult = await SearchSafe(ModSource.MCmod, keyword, null, null, mode);
+                    mcmodMatches = mcmodResult.Items;
+                    if (!primaryResult.Available && !mcmodResult.Available)
+                        ShowEmptyState("搜索暂时不可用", "网络连接不稳定，资源服务暂时没有响应。请检查网络后重试。", true);
+                }
+                else if (!primaryResult.Available)
+                {
+                    ShowEmptyState("搜索暂时不可用", "网络连接不稳定，资源服务暂时没有响应。请检查网络后重试。", true);
+                }
             }
 
             if (!IsCurrentContentRequest(generation)) return;
@@ -736,16 +824,24 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
 
             CountText.Text = _currentMods.Count > 0 ? $"共 {_currentMods.Count} 个结果" : "";
             CountText.Visibility = _currentMods.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            HintText.Text = _currentMods.Count == 0 ? $"没有找到相关{GetModeTitle(mode)}" : "";
+            HintText.Text = EmptyStateCard.Visibility == Visibility.Visible
+                ? ""
+                : _currentMods.Count == 0 ? $"没有找到相关{GetModeTitle(mode)}" : "";
+
+            if (_currentMods.Count > 0)
+                HideEmptyState();
 
             foreach (var mod in _currentMods)
                 ModList.Items.Add(CreateModItem(mod));
             _ = FillModMetadataAsync(_currentMods.ToList());
         }
-        catch (Exception ex)
+        catch
         {
             if (IsCurrentContentRequest(generation))
-                HintText.Text = $"搜索失败: {ex.Message}";
+            {
+                ShowEmptyState("搜索失败", "网络连接不稳定，请检查网络后重试。", true);
+                HintText.Text = "";
+            }
         }
         finally
         {
@@ -1122,24 +1218,26 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
         return false;
     }
 
-    private static async Task<List<ModItem>> SearchSafe(
+    private static async Task<SearchSourceResult> SearchSafe(
         ModSource source, string keyword, string? version, string? loader, ResourceMode mode)
     {
         try
         {
-            return source switch
+            var request = source switch
             {
-                ModSource.Modrinth => await ModrinthService.SearchModsAsync(
+                ModSource.Modrinth => ModrinthService.SearchModsAsync(
                     keyword, version, loader, 25, GetModrinthType(mode)),
-                ModSource.CurseForge => await CurseForgeService.SearchModsAsync(
+                ModSource.CurseForge => CurseForgeService.SearchModsAsync(
                     keyword, version, loader, 25, GetCurseForgeClassId(mode)),
-                ModSource.MCmod when mode == ResourceMode.Mods => await McmodService.SearchModsAsync(keyword),
-                _ => new()
+                ModSource.MCmod when mode == ResourceMode.Mods => McmodService.SearchModsAsync(keyword),
+                _ => Task.FromResult(new List<ModItem>())
             };
+            var result = await request.WaitAsync(TimeSpan.FromSeconds(12));
+            return new SearchSourceResult(result, true);
         }
         catch
         {
-            return new();
+            return new SearchSourceResult(new(), false);
         }
     }
 
@@ -2194,7 +2292,7 @@ public partial class ModBrowserPage : Page, IStandaloneSidebarPage
                 $"整合包已安装为实例「{instance.Name}」！\n\nMinecraft: {instance.McVersion}\n加载器: {instance.Loader}",
                 "安装完成", MessageBoxButton.OK, MessageBoxImage.Information);
             if (Window.GetWindow(this) is MainWindow mainWindow)
-                mainWindow.NavigateTo(mainWindow.HomePage);
+                mainWindow.NavigateToHome();
         }
         catch (Exception ex)
         {

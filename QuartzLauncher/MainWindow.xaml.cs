@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -76,6 +77,7 @@ public partial class MainWindow : Window
     private readonly double _startupTargetHeight;
     private readonly double _startupInitialWidth;
     private readonly double _startupInitialHeight;
+    private bool _startupAnimationInProgress;
 
     public MainWindow()
     {
@@ -84,7 +86,10 @@ public partial class MainWindow : Window
         SourceInitialized += (_, _) =>
         {
             ApplyRoundedWindowCorners();
-            SizeChanged += (_, _) => ApplyRoundedWindowCorners();
+            // Windows 11 的 DWM 圆角不需要在每一帧重设窗口区域。
+            // 旧系统才使用 SetWindowRgn；避免启动尺寸动画期间反复重设区域造成抖动。
+            if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+                SizeChanged += (_, _) => ApplyRoundedWindowCorners();
         };
 
         try
@@ -276,8 +281,8 @@ public partial class MainWindow : Window
         SidebarBorder.Opacity = 1;
 
         // 窄条只有 52px，左右 20px 内边距会把按钮挤掉，这里必须一起收窄
-        SidebarBrandRow.Margin = collapsed ? new Thickness(6, 10, 6, 10) : new Thickness(20, 10, 20, 10);
-        SidebarDivider.Margin = collapsed ? new Thickness(6, 4, 6, 8) : new Thickness(24, 4, 24, 8);
+        SidebarBrandRow.Margin = collapsed ? new Thickness(6, 10, 6, 10) : new Thickness(22, 18, 20, 16);
+        SidebarDivider.Margin = collapsed ? new Thickness(6, 4, 6, 8) : new Thickness(22, 4, 22, 14);
 
         if (!animate)
         {
@@ -385,7 +390,7 @@ public partial class MainWindow : Window
             grid.Margin = compact ? new Thickness(2, 2, 2, 2) : new Thickness(6, 2, 8, 2);
         if (template.FindName("navContent", button) is FrameworkElement presenter)
         {
-            presenter.Margin = compact ? new Thickness(2, 10, 2, 10) : new Thickness(14, 10, 14, 10);
+            presenter.Margin = compact ? new Thickness(2, 10, 2, 10) : new Thickness(14, 11, 14, 11);
             presenter.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
             if (!compact) presenter.ClearValue(HorizontalAlignmentProperty);
         }
@@ -680,6 +685,7 @@ public partial class MainWindow : Window
     {
         if (_startupAnimationStarted) return;
         _startupAnimationStarted = true;
+        _startupAnimationInProgress = true;
 
         var startLeft = Left;
         var startTop = Top;
@@ -717,6 +723,7 @@ public partial class MainWindow : Window
             Height = _startupTargetHeight;
             Left = targetLeft;
             Top = targetTop;
+            _startupAnimationInProgress = false;
         };
 
         BeginAnimation(Window.WidthProperty, width);
@@ -927,7 +934,35 @@ public partial class MainWindow : Window
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
+        // 窗口启动尺寸动画期间，Left/Top 由动画接管；此时 DragMove 会和动画抢控制权，
+        // 表现为窗口抖动或拖动后跳回。动画结束后再允许拖动。
+        if (!_startupAnimationStarted || _startupAnimationInProgress)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // 标题栏按钮的点击不能触发 DragMove，否则最小化/关闭时窗口会先抖一下。
+        if (IsInsideButton(e.OriginalSource as DependencyObject)) return;
         try { DragMove(); } catch { }
+    }
+
+    private static bool IsInsideButton(DependencyObject? source)
+    {
+        while (source != null)
+        {
+            if (source is ButtonBase) return true;
+            try
+            {
+                source = VisualTreeHelper.GetParent(source);
+            }
+            catch
+            {
+                source = LogicalTreeHelper.GetParent(source);
+            }
+        }
+
+        return false;
     }
 
     private async void Minimize_Click(object sender, RoutedEventArgs e)

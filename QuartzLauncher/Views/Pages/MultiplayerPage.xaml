@@ -127,6 +127,26 @@
                            Foreground="{DynamicResource TextBrush}"/>
                 <TextBlock x:Name="ChatChannelText" FontSize="11" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextMutedBrush}"/>
+                <Border x:Name="ChatLoginPrompt" Visibility="Collapsed"
+                        Style="{DynamicResource CardStyle}" Padding="14,12" Margin="0,12,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="世界聊天需要登录账号" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <TextBlock x:Name="ChatLoginPromptText"
+                                       Text="登录后即可进入世界频道，与其他玩家聊天。"
+                                       FontSize="11" TextWrapping="Wrap" Margin="0,4,12,0"
+                                       Foreground="{DynamicResource TextMutedBrush}"/>
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="前往登录" Style="{DynamicResource BtnPrimary}"
+                                Height="32" Padding="16,2" VerticalAlignment="Center"
+                                Click="ChatLogin_Click"/>
+                    </Grid>
+                </Border>
             </StackPanel>
 
             <Border Grid.Row="1" Style="{DynamicResource CardStyle}" MinHeight="320">

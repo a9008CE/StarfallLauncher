@@ -106,6 +106,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        try { UpdateService.StopLocalServer(); } catch { }
         try
         {
             if (Settings is not null) Settings.Save();

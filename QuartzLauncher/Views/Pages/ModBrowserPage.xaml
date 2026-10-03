@@ -15,7 +15,7 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <DockPanel Margin="0,10,0,10">
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,10,0,10">
-                    <Button Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                    <Button Content="&#xE72B;" AutomationProperties.Name="返回" FontFamily="Segoe MDL2 Assets" FontSize="14"
                             Width="32" Height="32" Background="Transparent" BorderThickness="0"
                             Foreground="{DynamicResource TextMutedBrush}" Cursor="Hand"
                             Click="Back_Click" Margin="16,0,0,0"/>
@@ -28,7 +28,7 @@
                         Margin="24,4,24,8"/>
 
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <RadioButton x:Name="NavSearch" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavSearch" AutomationProperties.Name="Mods 搜索" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  IsChecked="True" Click="NavSearch_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE721;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -36,7 +36,7 @@
                             <TextBlock Text="Mods 搜索" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavModpacks" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavModpacks" AutomationProperties.Name="整合包下载" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavModpacks_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE7F8;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -44,7 +44,7 @@
                             <TextBlock Text="整合包下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavShaders" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavShaders" AutomationProperties.Name="光影包下载" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavShaders_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE945;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -52,7 +52,7 @@
                             <TextBlock Text="光影包下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavResourcePacks" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavResourcePacks" AutomationProperties.Name="材质包下载" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavResourcePacks_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -60,7 +60,7 @@
                             <TextBlock Text="材质包下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavMap" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavMap" AutomationProperties.Name="地图下载" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                              Click="NavMap_Click">
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                         <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -68,7 +68,7 @@
                         <TextBlock Text="地图下载" VerticalAlignment="Center"/>
                     </StackPanel>
                 </RadioButton>
-                <RadioButton x:Name="NavJava" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                <RadioButton x:Name="NavJava" AutomationProperties.Name="Java 下载" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavJava_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE756;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -76,7 +76,7 @@
                             <TextBlock Text="Java 下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavDownloads" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavDownloads" AutomationProperties.Name="下载管理" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavDownloads_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -84,7 +84,7 @@
                             <TextBlock Text="下载管理" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
-                    <RadioButton x:Name="NavSettings" Style="{DynamicResource NavBtn}" GroupName="ModNav"
+                    <RadioButton x:Name="NavSettings" AutomationProperties.Name="下载设置" Style="{DynamicResource NavBtn}" GroupName="ModNav"
                                  Click="NavSettings_Click">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                             <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -156,7 +156,11 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <DockPanel x:Name="ResultsPanel" Grid.Column="0" Grid.ColumnSpan="2" Margin="12,12,6,12">
+                <!-- 资源列表整体放进卡片：与 版本库 / 服务器 / 设置 保持一致。
+                     否则首页壁纸会直接透过整个列表，文字可读性很差。 -->
+                <Border Grid.Column="0" Grid.ColumnSpan="2" Margin="12,12,12,12" Padding="0"
+                        Style="{DynamicResource CardStyle}">
+                <DockPanel x:Name="ResultsPanel" Margin="2">
                     <TextBlock x:Name="HintText" DockPanel.Dock="Top" FontSize="12"
                                Foreground="{DynamicResource TextMutedBrush}" Margin="16,0,0,8"
                                Text="加载中..." VerticalAlignment="Center"/>
@@ -182,14 +186,40 @@
                                     Click="LastPage_Click" ToolTip="末页"/>
                         </StackPanel>
                     </Border>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ListBox x:Name="ModList" BorderThickness="0"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                                 VirtualizingPanel.ScrollUnit="Pixel"
-                                 ItemContainerStyle="{DynamicResource ListBoxItem}"/>
-                    </ScrollViewer>
+                    <Grid>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ListBox x:Name="ModList" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.ScrollUnit="Pixel"
+                                     ItemContainerStyle="{DynamicResource ListBoxItem}"/>
+                        </ScrollViewer>
+                        <Border x:Name="EmptyStateCard" Visibility="Collapsed"
+                                HorizontalAlignment="Center" VerticalAlignment="Center"
+                                MaxWidth="420" Margin="24" Padding="28,24"
+                                Style="{DynamicResource CardStyle}">
+                            <StackPanel HorizontalAlignment="Center">
+                                <TextBlock Text="&#xE783;" FontFamily="Segoe MDL2 Assets" FontSize="30"
+                                           Foreground="{DynamicResource PrimaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="EmptyStateTitle" Text="暂时无法加载资源"
+                                           FontSize="15" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextBrush}"
+                                           HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                                <TextBlock x:Name="EmptyStateMessage"
+                                           Text="网络连接不稳定，请检查网络后重试。"
+                                           FontSize="12" TextWrapping="Wrap" TextAlignment="Center"
+                                           Foreground="{DynamicResource TextMutedBrush}"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                <Button x:Name="EmptyStateRetryButton" Content="重试"
+                                        Style="{DynamicResource BtnPrimary}" Height="34"
+                                        Padding="22,0" HorizontalAlignment="Center"
+                                        Margin="0,16,0,0" Click="EmptyStateRetry_Click"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </DockPanel>
+                </Border>
 
                 <Border x:Name="LoadingOverlay" Grid.ColumnSpan="2" Panel.ZIndex="20"
                         Background="{DynamicResource WindowBackgroundBrush}" Opacity="0.96"

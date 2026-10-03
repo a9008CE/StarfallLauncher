@@ -67,7 +67,7 @@ public partial class MultiplayerPage : Page
         if (section == "chat")
         {
             ShowView(ChatView);
-            _ = EnsureChatAsync();
+            _ = PrepareChatAsync();
             return;
         }
 
@@ -151,6 +151,35 @@ public partial class MultiplayerPage : Page
         }
     }
 
+    /// <summary>
+    /// 世界聊天要求账号登录。先恢复本地令牌，再建立聊天连接，避免
+    /// 已保存账号因为尚未进入好友页而被当成未登录用户。
+    /// </summary>
+    private async Task PrepareChatAsync()
+    {
+        await EnsureAccountAsync();
+        if (_account is not { IsLoggedIn: true })
+        {
+            ChatChannelText.Text = "";
+            ChatLoginPrompt.Visibility = Visibility.Visible;
+            ChatLoginPromptText.Text = _account?.NeedsReLogin == true
+                ? "登录状态已失效，请重新登录后再进入世界频道。"
+                : "登录后即可进入世界频道，与其他玩家聊天。";
+            ChatStatus.Text = _account?.NeedsReLogin == true
+                ? "登录状态已失效，请到好友页重新登录账号"
+                : "世界聊天需要先登录账号，请到好友页完成登录";
+            return;
+        }
+
+        ChatLoginPrompt.Visibility = Visibility.Collapsed;
+        await EnsureChatAsync();
+    }
+
+    private void ChatLogin_Click(object sender, RoutedEventArgs e)
+    {
+        ShowSection("friends");
+    }
+
     private async Task ConnectChatAsync()
     {
         ChatStatus.Text = "正在连接世界频道…";
@@ -174,9 +203,12 @@ public partial class MultiplayerPage : Page
         var ok = await client.ConnectAsync("world");
         if (!ReferenceEquals(_chat, client)) return;   // 期间已被替换/销毁，别覆盖新状态
         ChatChannelText.Text = ok ? "# 世界频道" : "";
+        ChatLoginPrompt.Visibility = !ok && client.LastError?.Contains("登录", StringComparison.OrdinalIgnoreCase) == true
+            ? Visibility.Visible
+            : Visibility.Collapsed;
         ChatStatus.Text = ok
             ? "已连接 · 注意文明发言，违规内容会被过滤"
-            : "连接失败，请稍后再试";
+            : client.LastError ?? "连接失败，请稍后再试";
     }
 
     /// <summary>时间分隔条：今天 / 昨天 / 具体日期（QQ 风格）。</summary>
@@ -2000,7 +2032,7 @@ public partial class MultiplayerPage : Page
 
         if (_chat is not { IsConnected: true })
         {
-            await EnsureChatAsync();
+            await PrepareChatAsync();
             if (_chat is not { IsConnected: true }) return;
         }
 
@@ -2035,10 +2067,9 @@ public partial class MultiplayerPage : Page
         {
             if (_chat is not { IsConnected: true })
             {
-                await EnsureChatAsync();
+                await PrepareChatAsync();
                 if (_chat is not { IsConnected: true })
                 {
-                    ChatStatus.Text = "连接失败，请稍后再试";
                     return;
                 }
             }

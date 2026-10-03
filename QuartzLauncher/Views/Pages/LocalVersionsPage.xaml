@@ -17,7 +17,7 @@
             <DockPanel Margin="0,10">
                 <StackPanel DockPanel.Dock="Top">
                     <DockPanel Margin="14,10,14,10">
-                        <Button Content="&#xE72B;" FontFamily="Segoe MDL2 Assets" FontSize="14"
+                        <Button Content="&#xE72B;" AutomationProperties.Name="返回" FontFamily="Segoe MDL2 Assets" FontSize="14"
                                 Width="32" Height="32" Background="Transparent" BorderThickness="0"
                                 Foreground="{DynamicResource TextMutedBrush}" Cursor="Hand"
                                 Click="Back_Click"/>

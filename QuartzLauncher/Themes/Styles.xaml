@@ -9,6 +9,14 @@
         <Setter Property="BorderThickness" Value="{DynamicResource CardBorderThickness}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CardCornerRadius}"/>
         <Setter Property="Padding" Value="{DynamicResource CardPadding}"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="{DynamicResource CardShadowBlur}"
+                                  ShadowDepth="{DynamicResource CardShadowDepth}"
+                                  Opacity="{DynamicResource CardShadowOpacity}"
+                                  Color="{DynamicResource CardShadowColor}"/>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="BtnBase" TargetType="Button">
@@ -566,24 +574,24 @@
         <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Padding" Value="0"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontFamily" Value="{DynamicResource UiFontFamily}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="GroupName" Value="Nav"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="rootBorder" Background="Transparent" Cursor="Hand" Margin="0,2,0,2"
+                        <Border x:Name="rootBorder" Background="Transparent" Cursor="Hand" Margin="0,3,0,3"
                              Padding="0" SnapsToDevicePixels="True" UseLayoutRounding="True">
                         <DockPanel LastChildFill="True">
                             <Border x:Name="indicator" DockPanel.Dock="Left"
-                                    Background="Transparent" Width="3" Margin="0,4,0,4"
+                                    Background="Transparent" Width="3" Margin="0,5,0,5"
                                     Opacity="0" RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <ScaleTransform ScaleY="1"/>
                                 </Border.RenderTransform>
                             </Border>
-                            <Grid x:Name="navContentGrid" Margin="6,2,8,2">
+                                <Grid x:Name="navContentGrid" Margin="6,2,8,2">
                                 <Border x:Name="activeBg" CornerRadius="{DynamicResource ButtonCornerRadius}"
                                         Background="{DynamicResource NavActiveBgBrush}" Opacity="0"/>
                                 <Border x:Name="hoverBg" CornerRadius="{DynamicResource ButtonCornerRadius}" Padding="0"
@@ -592,9 +600,9 @@
                                         <ScaleTransform ScaleX="1" ScaleY="1"/>
                                     </Border.RenderTransform>
                                     <ContentPresenter x:Name="navContent"
-                                                      HorizontalAlignment="{DynamicResource NavTextAlignment}"
-                                                      VerticalAlignment="Center" Margin="14,10"
-                                                      local:NavAlignmentAnimationBehavior.IsEnabled="True"/>
+                                                       HorizontalAlignment="{DynamicResource NavTextAlignment}"
+                                                       VerticalAlignment="Center" Margin="14,11"
+                                                       local:NavAlignmentAnimationBehavior.IsEnabled="True"/>
                                 </Border>
                             </Grid>
                         </DockPanel>

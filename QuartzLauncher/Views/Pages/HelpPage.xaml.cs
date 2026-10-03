@@ -416,6 +416,10 @@ public partial class HelpPage : Page
             textColor);
         ChatList.Items.Add(message);
 
+        // 只要有任意一条消息（包括开场欢迎语），空状态提示就必须收起，
+        // 否则欢迎语会在气泡和提示里各显示一次。
+        EmptyHint.Visibility = Visibility.Collapsed;
+
         Dispatcher.BeginInvoke(() =>
         {
             ChatScroll.UpdateLayout();

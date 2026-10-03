@@ -65,10 +65,16 @@ public static class InstancePathService
     public static string EnsureGameDirectory(AppPaths paths, Settings settings, Instance instance)
     {
         var root = GetGameDirectory(paths, settings, instance);
+        EnsureGameContentDirectories(root);
+        return root;
+    }
+
+    /// <summary>准备一个已经确定的游戏目录（整合包临时目录也使用这一套目录结构）。</summary>
+    public static void EnsureGameContentDirectories(string root)
+    {
         Directory.CreateDirectory(root);
         foreach (var name in GameContentDirectories)
             Directory.CreateDirectory(Path.Combine(root, name));
-        return root;
     }
 
     private static bool IsModded(Instance instance) =>

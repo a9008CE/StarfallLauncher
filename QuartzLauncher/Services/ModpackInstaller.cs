@@ -56,7 +56,6 @@ public static class ModpackInstaller
             }
 
             if (Directory.Exists(instanceRoot)) throw new IOException("目标实例目录已存在。");
-            Directory.Move(stagingRoot, instanceRoot);
             var instance = new Instance
             {
                 Id = instanceId,
@@ -71,11 +70,14 @@ public static class ModpackInstaller
                 JvmArguments = descriptor.JvmArguments,
                 GameArguments = descriptor.GameArguments
             };
-            InstancePathService.EnsureGameDirectory(paths, settings.Data, instance);
+            // PCL2 式提交：临时目录内先补齐目录并写完、校验 instance.json，
+            // 最后一次性移动为正式实例目录，避免首页扫描到半成品。
+            InstancePathService.EnsureGameContentDirectories(stagingRoot);
+            InstanceStore.WriteMetadata(stagingRoot, instance);
             var markerDir = Path.Combine(paths.VersionsDir, descriptor.MinecraftVersion);
             Directory.CreateDirectory(markerDir);
             File.WriteAllText(Path.Combine(markerDir, ".quartz-installed"), DateTimeOffset.UtcNow.ToString("O"));
-            new InstanceStore(paths.InstancesDir).Create(instance);
+            Directory.Move(stagingRoot, instanceRoot);
             return instance;
         }
         catch

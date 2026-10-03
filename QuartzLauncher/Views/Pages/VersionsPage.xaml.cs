@@ -450,12 +450,13 @@ public partial class VersionsPage : Page
                     GameArguments = descriptor.GameArguments
                 };
                 if (Directory.Exists(instanceRoot)) throw new IOException("目标实例目录已存在。");
-                Directory.Move(stagingRoot, instanceRoot);
-                InstancePathService.EnsureGameDirectory(App.Paths, App.Settings.Data, instance);
+                // 先在临时目录完成内容目录和元数据写入，校验通过后再整体提交。
+                InstancePathService.EnsureGameContentDirectories(stagingRoot);
+                InstanceStore.WriteMetadata(stagingRoot, instance);
                 var markerDir = Path.Combine(App.Paths.VersionsDir, descriptor.MinecraftVersion);
                 Directory.CreateDirectory(markerDir);
                 File.WriteAllText(Path.Combine(markerDir, ".quartz-installed"), DateTimeOffset.UtcNow.ToString("O"));
-                new InstanceStore(App.Paths.InstancesDir).Create(instance);
+                Directory.Move(stagingRoot, instanceRoot);
                 committed = true;
             }
             catch
@@ -469,7 +470,9 @@ public partial class VersionsPage : Page
             AnimatedMessageBox.Show(
                 $"整合包已导入为「{name}」。\n\n版本: {descriptor.MinecraftVersion}\n格式: {descriptor.Format}",
                 "导入完成", MessageBoxButton.OK, MessageBoxImage.Information);
-            ownerWindow?.NavigateTo(ownerWindow.HomePage);
+            // NavigateTo(HomePage) 不会刷新已有页面实例；必须走 NavigateToHome，
+            // 否则新导入的实例要等重启后才会出现在首页下拉框。
+            ownerWindow?.NavigateToHome();
         }
         catch (Exception ex)
         {

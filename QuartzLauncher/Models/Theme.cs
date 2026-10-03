@@ -37,15 +37,23 @@ public class Theme
             ? new Theme
             {
                 Name = "默认",
-                Primary = "#0A7E6E",
-                Bg = "#EEF3F8",
-                Card = "#FFFFFF",
-                Text = "#16202C",
-                TextMuted = "#7A8794",
-                Sidebar = "#F7FAFD",
-                Border = "#DCE5EE",
-                Danger = "#DC2626",
-                Success = "#16A34A"
+                 Primary = "#2878E8",
+                 Bg = "#F4F7FB",
+                 Card = "#FFFFFF",
+                 Text = "#1B2D43",
+                 TextMuted = "#7B8DA3",
+                 Sidebar = "#FFFFFF",
+                 Border = "#DCE5EE",
+                 Danger = "#DC2626",
+                 Success = "#16A34A",
+                 CardCornerRadius = 18,
+                 ButtonCornerRadius = 12,
+                 InputCornerRadius = 10,
+                 SidebarWidth = 236,
+                 NavButtonHeight = 44,
+                 CardShadowDepth = 4,
+                 CardShadowBlur = 18,
+                 CardShadowOpacity = 0.12
             }
             : new Theme
             {

@@ -59,6 +59,10 @@ public static class UpdateService
     {
     }
 
+    public static void StopLocalServer()
+    {
+    }
+
     public static Task<UpdateManifest?> CheckAsync(string manifestUrl) => Task.FromResult<UpdateManifest?>(null);
 
     public static Task<string> DownloadPackageAsync(UpdateManifest manifest, string tempDir,
