@@ -940,11 +940,51 @@ public partial class MainWindow : Window
 
     // 联机专用侧栏
     private void MPBack_Click(object sender, RoutedEventArgs e) => NavigateToHome();
-    private void MPNavLobby_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("lobby");
+    /// <summary>
+    /// 切到联机页的某个分区。
+    ///
+    /// ⚠️ 必须**先保证当前显示的就是 MultiplayerPage**，再 ShowSection。
+    /// 之前这几个 handler 只写了 `_multiplayerPage?.ShowSection(...)`，
+    /// 从「服务器」页（ServerBrowserPage）过来时当前显示的压根不是 MultiplayerPage，
+    /// 于是分区确实切了、但用户看到的还是服务器页 —— 表现就是
+    /// **「点了服务器之后，大厅/世界聊天/我的房间/好友全都没反应，只有返回键有用」**。
+    ///
+    /// 已经在该页时不重复 NavigateTo：一是没必要，二是 NavigateTo 里进联机页会强制
+    /// 回到大厅分区（见下面的 MPNavLobby.IsChecked = true），会让点击闪一下。
+    /// </summary>
+    private void GoMultiplayerSection(string section)
+    {
+        var page = _multiplayerPage ??= new MultiplayerPage();
+        if (!ReferenceEquals(MainFrame.Content, page)) NavigateTo(page);
+        page.ShowSection(section);
+        SelectMpNav(section);
+    }
+
+    /// <summary>
+    /// 把联机子导航的高亮打到对应分区上。
+    ///
+    /// ⚠️ 必须显式设置。NavigateTo 在进入 MultiplayerPage 时会**强制把高亮打到「大厅」**
+    /// （见 `MPNavLobby.IsChecked = true`），所以从「服务器」页切到「世界聊天」时，
+    /// 内容是切过去了、高亮却留在大厅 —— 就是「明明切过去了，灯还亮在错误的项上」。
+    /// 这几项共用 GroupName="MpNav"，把目标项设为 true 会自动取消其余的，不用手动清。
+    /// </summary>
+    private void SelectMpNav(string section)
+    {
+        switch (section)
+        {
+            case "lobby":   MPNavLobby.IsChecked = true; break;
+            case "servers": MPNavServers.IsChecked = true; break;
+            case "chat":    MPNavChat.IsChecked = true; break;
+            case "myrooms": MPNavMyRooms.IsChecked = true; break;
+            case "friends": MPNavFriends.IsChecked = true; break;
+        }
+    }
+
+    private void MPNavLobby_Click(object sender, RoutedEventArgs e) => GoMultiplayerSection("lobby");
     private void MPNavServers_Click(object sender, RoutedEventArgs e) => NavigateToServerBrowser();
-    private void MPNavChat_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("chat");
-    private void MPNavMyRooms_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("myrooms");
-    private void MPNavFriends_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("friends");
+    private void MPNavChat_Click(object sender, RoutedEventArgs e) => GoMultiplayerSection("chat");
+    private void MPNavMyRooms_Click(object sender, RoutedEventArgs e) => GoMultiplayerSection("myrooms");
+    private void MPNavFriends_Click(object sender, RoutedEventArgs e) => GoMultiplayerSection("friends");
     private void NavModBrowser_Click(object sender, RoutedEventArgs e)
     {
         var instance = HomePage.SelectedInstance;
