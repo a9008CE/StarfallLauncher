@@ -78,6 +78,13 @@ public partial class SettingsPage : Page
             await CheckForUpdateAsync(true);
     }
 
+    private void OpenMore_Click(object sender, RoutedEventArgs e)
+    {
+        // 故意不自动保存：其它导航（点侧栏）也不保存，这里单独保存会让人猜不到哪些值生效了。
+        // 页面按惯例要靠「保存设置」落盘。
+        (Window.GetWindow(this) as MainWindow)?.NavigateToMorePage();
+    }
+
     private void ShowAnnouncement_Click(object sender, RoutedEventArgs e)
     {
         var announcement = UpdateService.LoadAnnouncement();

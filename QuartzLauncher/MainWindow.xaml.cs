@@ -62,6 +62,50 @@ public partial class MainWindow : Window
     public HomePage HomePage => _homePage ??= new HomePage(GetVersionsPage());
     public VersionsPage GetVersionsPage() => _versionsPage ??= new VersionsPage();
 
+    /// <summary>
+    /// 侧栏底部账号栏：点击回到首页并调出登录切换窗。
+    /// 浮层本身在 HomePage 里（三种登录方式都在那儿），这里只负责导航 + 触发。
+    /// </summary>
+    private void SidebarProfile_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateToHome();
+        // 走「按当前账号预选好卡片」那条路径，不是裸的 ShowLoginOverlay：
+        // 后者不会选中任何一张卡，会出现「字段展开了但卡片没高亮」的怪样子。
+        // 直接调用，别只靠 Dispatcher.BeginInvoke 排队——实测那版点了没反应。
+        HomePage.ShowLoginOverlayForCurrentAccount();
+        // 如果刚才是从别的页面导航过来的，浮层会被新挂上的页面盖住，导航完再补一次。
+        // 这一步是幂等的（置 Visible + 重放一次 200ms 动画 + 重新选卡），调两次没有副作用。
+        Dispatcher.BeginInvoke(new Action(() => HomePage.ShowLoginOverlayForCurrentAccount()),
+            System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// 由 HomePage.SetProfile 回调，保证侧栏和首页的账号信息永远一致。
+    /// </summary>
+    public void UpdateSidebarProfile(string name, string status, string initial)
+    {
+        SidebarProfileName.Text = string.IsNullOrWhiteSpace(name) ? "未登录" : name;
+        SidebarProfileStatus.Text = string.IsNullOrWhiteSpace(status) ? "离线登录" : status;
+        SidebarProfileAvatar.Text = string.IsNullOrWhiteSpace(initial) ? "?" : initial;
+    }
+
+    /// <summary>
+    /// 把头像图刷到侧栏账号栏（自定义头像图 / 正版皮肤脸）。
+    /// 传 null 就恢复成字母头像。首页那个头像在改版时撤掉了，这个能力挪到侧栏来。
+    /// </summary>
+    public void UpdateSidebarAvatar(ImageBrush? brush)
+    {
+        if (brush == null)
+        {
+            SidebarProfileAvatarHost.Background = (Brush)FindResource("PrimaryBrush");
+            SidebarProfileAvatar.Visibility = Visibility.Visible;
+            return;
+        }
+
+        SidebarProfileAvatarHost.Background = brush;
+        SidebarProfileAvatar.Visibility = Visibility.Collapsed;
+    }
+
     private static readonly HttpClient Http = HttpClients.Create();
     private readonly HashSet<string> _shownQuotes = new();
     private readonly Random _rng = new();
@@ -867,7 +911,6 @@ public partial class MainWindow : Window
     }
 
     private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateToHome();
-
     public void NavigateToHome()
     {
         // 首页实例列表只在首次加载时读取一次，回到首页时重新刷新，
@@ -886,7 +929,8 @@ public partial class MainWindow : Window
     }
     private void NavVersions_Click(object sender, RoutedEventArgs e) => NavigateTo(GetVersionsPage());
     public void NavigateToLocalVersions() => NavigateTo(_localVersionsPage ??= new LocalVersionsPage());
-    private void NavServers_Click(object sender, RoutedEventArgs e) => NavigateTo(_serverBrowserPage ??= new ServerBrowserPage());
+    /// <summary>首页「快捷入口」卡用得到（侧栏的「帮助」项已撤掉，这里保留成公开跳转）。</summary>
+    public void NavigateToHelp() => NavigateTo(_helpPage ??= new HelpPage());
     public void NavigateToServerBrowser() => NavigateTo(_serverBrowserPage ??= new ServerBrowserPage());
     public void NavigateToBrowser(string url, Page? backTarget = null) => NavigateTo(new BrowserPage(url, backTarget));
     public void NavigateToJavaDownload() => NavigateTo(new ModBrowserPage(initialMode: "java"));
@@ -897,6 +941,7 @@ public partial class MainWindow : Window
     // 联机专用侧栏
     private void MPBack_Click(object sender, RoutedEventArgs e) => NavigateToHome();
     private void MPNavLobby_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("lobby");
+    private void MPNavServers_Click(object sender, RoutedEventArgs e) => NavigateToServerBrowser();
     private void MPNavChat_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("chat");
     private void MPNavMyRooms_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("myrooms");
     private void MPNavFriends_Click(object sender, RoutedEventArgs e) => _multiplayerPage?.ShowSection("friends");
@@ -908,9 +953,9 @@ public partial class MainWindow : Window
             : InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
         NavigateTo(new ModBrowserPage(gameDirectory));
     }
-    private void NavSettings_Click(object sender, RoutedEventArgs e) => NavigateTo(_settingsPage ??= new SettingsPage());
-    private void NavMore_Click(object sender, RoutedEventArgs e) => NavigateTo(_morePage ??= new MorePage());
-    private void NavHelp_Click(object sender, RoutedEventArgs e) => NavigateTo(_helpPage ??= new HelpPage());
+    private void NavSettings_Click(object sender, RoutedEventArgs e) => NavigateToSettings();
+    /// <summary>设置页。更多功能页的「返回」也走这里——用户是从设置进去的。</summary>
+    public void NavigateToSettings() => NavigateTo(_settingsPage ??= new SettingsPage());
     private void NavVersionSettings_Click(object sender, RoutedEventArgs e) => NavigateTo(_versionSettingsPage ??= new VersionSettingsPage());
     public void NavigateToModDownloadSettings() => NavigateTo(_modDownloadSettingsPage ??= new ModDownloadSettingsPage());
     public void NavigateToMorePage(bool selectModDownload = false)
@@ -1164,20 +1209,22 @@ public partial class MainWindow : Window
 
     private void QuickInstall_Click(object sender, RoutedEventArgs e) => NavigateTo(GetVersionsPage());
 
+    /// <summary>
+    /// 按页面反查该高亮哪个侧栏项。侧栏现在是四项：首页 / 联机 / 资源 / 设置。
+    /// 「版本库」「帮助」「更多功能」已从侧栏撤掉：前两个挪到首页的快捷入口卡，
+    /// 更多功能并进设置页。版本相关的页面统一高亮首页（它们都是从首页进的）。
+    /// </summary>
     private void SelectNavButton(Page page)
     {
         int idx;
         if (page is HomePage) idx = 0;
-        else if (page is VersionsPage or LocalVersionsPage or VersionSettingsPage or LoaderPickerPage or LoaderDetailPage
-                  or InstanceDetailPage or ModsPage or SavesPage or ResourcePacksPage
-                 or ShaderPacksPage or PresetPage) idx = 1;
-        else if (page is ServerBrowserPage) idx = 2;
-        else if (page is MultiplayerPage) idx = 3;
-        else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 4;
-        else if (page is SettingsPage) idx = 5;
-        else if (page is HelpPage) idx = 6;
-        else if (page is MorePage or ThemeDetailPage or AnimationSettingsPage
-                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage) idx = 7;
+        else if (page is MultiplayerPage or ServerBrowserPage) idx = 1;
+        else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 2;
+        else if (page is SettingsPage or MorePage or ThemeDetailPage or AnimationSettingsPage
+                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage) idx = 3;
+        else if (page is VersionsPage or LocalVersionsPage or VersionSettingsPage or LoaderPickerPage
+                  or LoaderDetailPage or InstanceDetailPage or ModsPage or SavesPage or ResourcePacksPage
+                  or ShaderPacksPage or PresetPage or HelpPage) idx = 0;
         else return;
 
         for (var i = 0; i < NavStack.Children.Count; i++)
@@ -1206,14 +1253,18 @@ public partial class MainWindow : Window
     {
         SelectNavButton(page);
 
-        // 进入联机大厅时，主侧栏整体换成联机专用侧栏
-        var inMultiplayer = page is Views.Pages.MultiplayerPage;
+        // 进入联机相关页面时，主侧栏整体换成联机专用侧栏（大厅 / 服务器 / 聊天 / 我的房间 / 好友）
+        var inMultiplayer = page is Views.Pages.MultiplayerPage or ServerBrowserPage;
         NavStack.Visibility = inMultiplayer ? Visibility.Collapsed : Visibility.Visible;
         NavStackMultiplayer.Visibility = inMultiplayer ? Visibility.Visible : Visibility.Collapsed;
-        if (inMultiplayer)
+        if (page is Views.Pages.MultiplayerPage)
         {
             MPNavLobby.IsChecked = true;
             _multiplayerPage?.ShowSection("lobby");
+        }
+        else if (inMultiplayer)
+        {
+            MPNavServers.IsChecked = true;
         }
         if (ReferenceEquals(MainFrame.Content, page) && MainFrame.IsHitTestVisible) return;
         _ = NavigateToAsync(page, ++_navigationGeneration);
@@ -1298,6 +1349,12 @@ public partial class MainWindow : Window
                     new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(exitDuration)));
             }
 
+            // 切换动画里整块内容要逐帧改 Opacity + TranslateTransform。
+            // 不缓存的话每一帧都要把整页（首页有 6 张卡）重新合成一遍 —— 这就是
+            // 「切页时 GPU 最高、还卡」的来源。开 BitmapCache 后动画作用在缓存位图上，
+            // 旧页面在退出期间是静止的，所以缓存不会失效。
+            MainFrame.CacheMode = new BitmapCache();
+
             MainFrame.BeginAnimation(OpacityProperty,
                 new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(exitDuration)));
 
@@ -1317,9 +1374,16 @@ public partial class MainWindow : Window
                     new DoubleAnimation(0, exitDistance, TimeSpan.FromMilliseconds(exitDuration)) { EasingFunction = exitEase });
                 await Task.Delay(exitDuration);
             }
-            if (generation != _navigationGeneration) return;
+            if (generation != _navigationGeneration)
+            {
+                // 别把缓存留在页面上：下一次导航会拿到过期位图
+                MainFrame.CacheMode = null;
+                return;
+            }
 
             MainFrame.BeginAnimation(OpacityProperty, null);
+            // 新页面必须实打实渲染，不能吃旧页面的缓存
+            MainFrame.CacheMode = null;
             MainFrame.Navigate(page);
 
             var showSidebar = !targetUsesStandaloneSidebar;

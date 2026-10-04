@@ -107,8 +107,10 @@ public partial class MorePage : Page, IStandaloneSidebarPage
 
     private void Back_Click(object sender, RoutedEventArgs e)
     {
+        // 更多功能现在是从「设置 → 打开更多功能」进来的，返回要回设置；
+        // 以前它是侧栏一项，返回首页还说得过去，现在退回首页会让人找不着北。
         if (Window.GetWindow(this) is MainWindow mainWindow)
-            mainWindow.NavigateTo(mainWindow.HomePage);
+            mainWindow.NavigateToSettings();
     }
 
     private void NavigateContent(object page)

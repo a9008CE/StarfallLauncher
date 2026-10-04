@@ -33,6 +33,8 @@ public partial class HomePage : Page
     private CancellationTokenSource? _microsoftLoginCts;
     private string _announcementKey = "";
     private bool _announcementRead;
+    /// <summary>公告正文是否被手动展开。和"已读"是两件事：展开只是看一眼，已读才收起整条。</summary>
+    private bool _announcementExpanded;
     private bool _logHasError;
 
     public HomePage(VersionsPage versionsPage)
@@ -56,6 +58,7 @@ public partial class HomePage : Page
         SetLogPanelExpanded(false, animate: false);
         RefreshProfile();
         RefreshInstances();
+        RefreshAmbientStatus();
         if (IsWanderingEarth) LaunchBtn.Content = "启动发动机";
         if (!_launchInProgress && _gameProcess is not { HasExited: false })
             SetLaunchState(LaunchUiState.Idle);
@@ -67,15 +70,38 @@ public partial class HomePage : Page
         _announcementKey = $"{UpdateService.CurrentVersion}|{announcement.Version}";
         AnnouncementVersionText.Text = $"QuartzLauncher {announcement.Version}";
         AnnouncementTitleText.Text = $"{announcement.Version} 更新内容";
-        AnnouncementNotesText.Text = string.IsNullOrWhiteSpace(announcement.Notes)
+
+        var notes = string.IsNullOrWhiteSpace(announcement.Notes)
             ? "本次更新暂无文字说明。"
             : NormalizeAnnouncementNotes(announcement.Notes);
+        AnnouncementNotesText.Text = notes;
+        AnnouncementSummaryText.Text = BuildAnnouncementSummary(notes);
 
         _announcementRead = string.Equals(
             App.Settings.Data.AnnouncementReadVersion,
             _announcementKey,
             StringComparison.Ordinal);
-        SetAnnouncementContentVisible(!_announcementRead);
+        // 版式约定：默认只露窄条，正文要点「展开」才出来
+        _announcementExpanded = false;
+        AnnouncementReadButton.Content = _announcementRead ? "查看公告" : "已读";
+        UpdateHomeSurface();
+    }
+
+    /// <summary>把公告正文压成一行摘要，放在窄条上（原样搬第一条太长）。</summary>
+    private static string BuildAnnouncementSummary(string notes)
+    {
+        var lines = notes
+            .Replace("\r", "")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim().TrimStart('•').Trim())
+            .Where(line => line.Length > 0)
+            .ToList();
+
+        if (lines.Count == 0) return "点右侧「展开」查看本次更新内容";
+
+        var head = string.Join(" · ", lines.Take(3));
+        if (head.Length > 56) head = string.Concat(head.AsSpan(0, 56), "…");
+        return lines.Count <= 3 ? head : $"{head} —— 点右侧展开全文";
     }
 
     /// <summary>
@@ -97,33 +123,40 @@ public partial class HomePage : Page
         }
     }
 
-    private void SetAnnouncementContentVisible(bool visible)
+    /// <summary>展开 / 收起公告正文。只影响版面，不动「已读」状态。</summary>
+    private void SetAnnouncementExpanded(bool expanded)
     {
-        _announcementRead = !visible;
-        AnnouncementContent.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        AnnouncementReadButton.Content = visible ? "已读" : "查看公告";
-        AnnouncementReadButton.ToolTip = visible ? "标记这版公告为已读" : "手动查看本次更新公告";
-        if (visible)
-        {
-            AnnouncementPanel.Visibility = Visibility.Visible;
-        }
-        UpdateHomeSurface();
+        _announcementExpanded = expanded;
+        AnnouncementContent.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        AnnouncementToggleBtn.Content = expanded ? "收起" : "展开";
+    }
+
+    private void AnnouncementToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_announcementKey)) return;
+        SetAnnouncementExpanded(!_announcementExpanded);
     }
 
     private void AnnouncementRead_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_announcementKey)) return;
 
-        if (AnnouncementContent.Visibility == Visibility.Visible)
+        if (_announcementRead)
         {
-            App.Settings.Data.AnnouncementReadVersion = _announcementKey;
-            App.Settings.Save();
-            SetAnnouncementContentVisible(false);
+            // 已读之后整条是收掉的，按钮变成「查看公告」——再点一次就翻出来看
+            _announcementRead = false;
+            SetAnnouncementExpanded(true);
         }
         else
         {
-            SetAnnouncementContentVisible(true);
+            App.Settings.Data.AnnouncementReadVersion = _announcementKey;
+            App.Settings.Save();
+            _announcementRead = true;
+            SetAnnouncementExpanded(false);
         }
+
+        AnnouncementReadButton.Content = _announcementRead ? "查看公告" : "已读";
+        UpdateHomeSurface();
     }
 
     private void UpdateHomeSurface()
@@ -141,22 +174,14 @@ public partial class HomePage : Page
             return;
         }
 
-        if (_announcementRead)
-        {
-            HomeNoticeCard.Visibility = Visibility.Collapsed;
-            AnnouncementPanel.Visibility = Visibility.Collapsed;
-            LogPanel.Visibility = Visibility.Collapsed;
-            LogPanel.Opacity = 1;
-            LogPanel.IsHitTestVisible = false;
-            return;
-        }
-
-        HomeNoticeCard.Visibility = Visibility.Visible;
-        AnnouncementPanel.Visibility = Visibility.Visible;
-        AnnouncementContent.Visibility = Visibility.Visible;
         LogPanel.Visibility = Visibility.Collapsed;
         LogPanel.Opacity = 1;
         LogPanel.IsHitTestVisible = false;
+
+        // 已读 → 整条收掉不占版面；未读 → 只露窄条，正文靠「展开」拉出来
+        AnnouncementPanel.Visibility = Visibility.Visible;
+        HomeNoticeCard.Visibility = _announcementRead ? Visibility.Collapsed : Visibility.Visible;
+        SetAnnouncementExpanded(_announcementExpanded && !_announcementRead);
     }
 
     private static string NormalizeAnnouncementNotes(string notes)
@@ -199,6 +224,9 @@ public partial class HomePage : Page
     /// <summary>皮肤脸部头像（正版走官方、第三方走 Yggdrasil、离线用本地皮肤或默认 Steve/Alex）。</summary>
     private async Task ApplyAvatarAsync()
     {
+        var mainWindow = Application.Current?.MainWindow as MainWindow;
+        if (mainWindow == null) return;
+
         try
         {
             // 用户手动选的本地头像图优先（点头像导入的图片）
@@ -212,8 +240,7 @@ public partial class HomePage : Page
                 custom.DecodePixelWidth = 64;
                 custom.EndInit();
                 custom.Freeze();
-                AvatarBorder.Background = new ImageBrush(custom) { Stretch = Stretch.UniformToFill };
-                AvatarText.Visibility = Visibility.Collapsed;
+                mainWindow.UpdateSidebarAvatar(new ImageBrush(custom) { Stretch = Stretch.UniformToFill });
                 return;
             }
 
@@ -221,8 +248,7 @@ public partial class HomePage : Page
             if (avatar == null) return;
             var brush = new ImageBrush(avatar) { Stretch = Stretch.UniformToFill };
             RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
-            AvatarBorder.Background = brush;
-            AvatarText.Visibility = Visibility.Collapsed;
+            mainWindow.UpdateSidebarAvatar(brush);
         }
         catch
         {
@@ -237,9 +263,12 @@ public partial class HomePage : Page
             ? "Steve"
             : settings.PlayerName.Trim();
 
-        AvatarBorder.Background = (Brush)FindResource("PrimaryBrush");
-        AvatarText.Visibility = Visibility.Visible;
-        // 头像可能联网获取（正版官方皮肤 / 第三方 Yggdrasil），异步补上
+        // 先回到字母头像，皮肤脸可能联网取，异步补上
+        (Application.Current?.MainWindow as MainWindow)?.UpdateSidebarAvatar(null);
+        // 已经设过自定义头像才显示「恢复默认」，否则那按钮没意义
+        ClearAvatarBtn.Visibility = string.IsNullOrWhiteSpace(settings.AuthAvatarPath)
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         _ = ApplyAvatarAsync();
 
         if (settings.AuthMode == AuthModes.Microsoft && !string.IsNullOrWhiteSpace(settings.AuthPlayerName))
@@ -258,10 +287,8 @@ public partial class HomePage : Page
 
     private void SetProfile(string name, string badge, string info)
     {
-        ProfileName.Text = name;
-        ProfileBadge.Text = badge;
-        ProfileInfo.Text = info;
-        AvatarText.Text = GetInitial(name);
+        // 首页顶部的账号卡在改版时撤掉了，账号信息统一由侧栏底部那条显示
+        (Application.Current?.MainWindow as MainWindow)?.UpdateSidebarProfile(name, info, GetInitial(name));
     }
 
     private static string GetInitial(string name) =>
@@ -318,6 +345,10 @@ public partial class HomePage : Page
         }
 
         LaunchBtn.IsEnabled = InstanceSelector.SelectedItem is ComboBoxItem;
+        // 「版本列表」快捷卡上顺手报一下数量，省得点进去才知道装了几个
+        QuickVersionsHint.Text = InstanceSelector.Items.Count > 0
+            ? $"已安装 {InstanceSelector.Items.Count} 个版本"
+            : "还没装版本，点进来看看";
         UpdateInstanceInfo();
     }
 
@@ -364,27 +395,65 @@ public partial class HomePage : Page
     {
         if (InstanceSelector.SelectedItem is not ComboBoxItem item || item.Tag is not Instance instance)
         {
+            InstanceTitle.Text = "还没有可用的版本";
+            InstanceMeta.Text = "先去「版本列表」装一个吧";
             InstanceInfo.Text = "";
+            ShowInstanceIcon(null);
             return;
         }
 
-        var parts = new List<string> { $"版本: {instance.McVersion}" };
+        InstanceTitle.Text = string.IsNullOrWhiteSpace(instance.Name) ? instance.VersionId : instance.Name;
+
+        // 大卡片中间那行：Minecraft 1.20.1 · Fabric 0.15.11 · 12 Mods
+        var parts = new List<string> { $"Minecraft {instance.McVersion}" };
         if (!string.IsNullOrWhiteSpace(instance.Loader)
             && !instance.Loader.Equals("vanilla", StringComparison.OrdinalIgnoreCase))
         {
             var loaderName = char.ToUpperInvariant(instance.Loader[0]) + instance.Loader[1..];
-            parts.Add($"加载器: {loaderName}");
+            if (!string.IsNullOrWhiteSpace(instance.LoaderVersion))
+                loaderName += $" {instance.LoaderVersion}";
+            parts.Add(loaderName);
         }
 
-        var modsDir = Path.Combine(
-            InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance), "mods");
+        var gameDir = InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
+        var modsDir = Path.Combine(gameDir, "mods");
         if (Directory.Exists(modsDir))
         {
             var modCount = Directory.GetFiles(modsDir, "*.jar").Length;
-            if (modCount > 0) parts.Add($"Mod: {modCount} 个");
+            if (modCount > 0) parts.Add($"{modCount} Mods");
         }
 
-        InstanceInfo.Text = string.Join("  ·  ", parts);
+        InstanceMeta.Text = string.Join("  ·  ", parts);
+        InstanceInfo.Text = $"游戏目录：{gameDir}";
+        ShowInstanceIcon(instance);
+    }
+
+    /// <summary>实例图标。有图标就贴图（Border 会把背景裁成圆），没有就退回默认字形。</summary>
+    private void ShowInstanceIcon(Instance? instance)
+    {
+        if (instance != null)
+        {
+            try
+            {
+                var source = InstanceIconService.Load(instance);
+                if (source != null)
+                {
+                    var brush = new ImageBrush(source) { Stretch = Stretch.UniformToFill };
+                    // 方块图标是像素画：NearestNeighbor 既更还原，也比 HighQuality 的双三次滤镜便宜
+                    RenderOptions.SetBitmapScalingMode(brush, BitmapScalingMode.NearestNeighbor);
+                    InstanceIconHost.Background = brush;
+                    InstanceIconGlyph.Visibility = Visibility.Collapsed;
+                    return;
+                }
+            }
+            catch
+            {
+                // 图标坏了不该拦住首页
+            }
+        }
+
+        InstanceIconHost.Background = (Brush)FindResource("InputBgBrush");
+        InstanceIconGlyph.Visibility = Visibility.Visible;
     }
 
     private enum LaunchUiState { Idle, Launching, Running, Crashed }
@@ -454,17 +523,26 @@ public partial class HomePage : Page
                 LaunchStatusPercent.Text = "";
                 LaunchStatusDetail.Text = engine
                     ? "等待点火指令 // 道路千万条，安全第一条"
-                    : "选择版本后点击「启动游戏」";
+                    : "选择版本后点击「进入游戏」";
                 LaunchProgressBar.Foreground = engineBrush;
                 LaunchProgressBar.Value = 0;
                 break;
         }
+
+        // 底部状态条左侧那个小圆点跟着状态走
+        StatusDot.Fill = state switch
+        {
+            LaunchUiState.Running => success,
+            LaunchUiState.Crashed => danger,
+            _ => primary
+        };
     }
 
     private void SetLaunchProgress(string step, double progress)
     {
         LaunchStatusText.Text = step;
         LaunchStatusText.Foreground = TryFindResource("TextBrush") as Brush ?? Brushes.White;
+        StatusDot.Fill = TryFindResource("PrimaryBrush") as Brush ?? Brushes.DodgerBlue;
         LaunchProgressBar.Foreground = TryFindResource("PrimaryBrush") as Brush ?? Brushes.DodgerBlue;
         if (progress >= 0)
         {
@@ -476,6 +554,20 @@ public partial class HomePage : Page
         {
             LaunchStatusPercent.Text = "";
         }
+    }
+
+    /// <summary>底部状态条中间那段：全是本地设置里现成的，不联网、不编数。</summary>
+    private void RefreshAmbientStatus()
+    {
+        var settings = App.Settings.Data;
+        var workers = settings.DownloadWorkers > 0 ? settings.DownloadWorkers : 16;
+
+        var parts = new List<string>
+        {
+            $"下载 {workers} 线程就绪",
+            settings.ThemeBackgroundCarousel ? "背景轮播已开启" : "背景轮播已关闭"
+        };
+        AmbientStatusText.Text = "· " + string.Join(" · ", parts);
     }
 
     private async void Launch_Click(object sender, RoutedEventArgs e)
@@ -1175,7 +1267,8 @@ public partial class HomePage : Page
         }
     }
 
-    private void Avatar_Click(object sender, MouseButtonEventArgs e)
+    /// <summary>选一张本地 PNG 当头像。不选就自动用正版皮肤脸 / 名字首字母。</summary>
+    private void PickAvatar_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -1188,7 +1281,23 @@ public partial class HomePage : Page
         RefreshProfile();
     }
 
-    private void SwitchAccount_Click(object sender, RoutedEventArgs e)
+    /// <summary>改回自动获取的头像（正版皮肤脸 / 名字首字母）。</summary>
+    private void ClearAvatar_Click(object sender, RoutedEventArgs e)
+    {
+        App.Settings.Data.AuthAvatarPath = "";
+        App.Settings.Save();
+        RefreshProfile();
+    }
+
+    /// <summary>「取消」：跟点浮层外面一样，只是不切换账号。</summary>
+    private void LoginCancel_Click(object sender, RoutedEventArgs e) => HideLoginOverlay();
+
+    /// <summary>
+    /// 打开登录切换窗，并按当前账号模式预先选中对应那张卡（离线/第三方/正版）。
+    /// 侧栏底部的账号栏走这里。只调 ShowLoginOverlay 的话三张卡会一张都不高亮，
+    /// 但离线字段已经展开——看着像坏了。
+    /// </summary>
+    public void ShowLoginOverlayForCurrentAccount()
     {
         var settings = App.Settings.Data;
         ResetLoginPanels();
@@ -1255,7 +1364,8 @@ public partial class HomePage : Page
         panel.RenderTransform = new TranslateTransform();
     }
 
-    private void ShowLoginOverlay()
+    /// <summary>打开登录浮层。侧栏底部的账号栏也会调它，所以是 public。</summary>
+    public void ShowLoginOverlay()
     {
         LoginOverlay.Visibility = Visibility.Visible;
         OverlayBrush.BeginAnimation(SolidColorBrush.OpacityProperty,
@@ -1533,6 +1643,18 @@ public partial class HomePage : Page
     {
         FindFrame()?.Navigate(_versionsPage);
     }
+
+    // ── 首页「快捷入口」三张卡 ──
+    // 帮助和版本列表走 MainWindow 的公开跳转方法（与侧栏共用同一个页面实例，不重复构造）；
+    // 版本设置沿用本页已有的 VersionSettings_Click 逻辑。
+    private void QuickHelp_Click(object sender, MouseButtonEventArgs e)
+        => (Application.Current?.MainWindow as MainWindow)?.NavigateToHelp();
+
+    private void QuickVersions_Click(object sender, MouseButtonEventArgs e)
+        => (Application.Current?.MainWindow as MainWindow)?.NavigateToLocalVersions();
+
+    private void QuickVersionSettings_Click(object sender, MouseButtonEventArgs e)
+        => VersionSettings_Click(sender, new RoutedEventArgs());
 
     private void VersionList_Click(object sender, RoutedEventArgs e)
     {

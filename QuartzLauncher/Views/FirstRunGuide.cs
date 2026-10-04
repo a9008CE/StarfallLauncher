@@ -456,9 +456,16 @@ public static class FirstRunGuide
 
     private static FrameworkElement? NavAt(int index)
     {
-        // 侧栏入口是 NavStack 里按顺序排的匿名 RadioButton
+        // 侧栏入口是 NavStack 里按顺序排的匿名 RadioButton（改版后是四项：首页/联机/资源/设置）
         var items = MainWindow.NavStackItems;
         return index >= 0 && index < items.Count ? items[index] : null;
+    }
+
+    /// <summary>首页「版本列表」快捷入口卡 —— 「版本库」从侧栏撤掉后改点这里。</summary>
+    private static FrameworkElement? QuickVersionsCard()
+    {
+        var card = MainWindow.Current?.HomePage.QuickVersionsCard;
+        return card is { IsVisible: true } ? card : null;
     }
 
     private static FrameworkElement? LaunchButton()
@@ -482,21 +489,21 @@ public static class FirstRunGuide
             "没装 Java 也没关系，启动器会自己准备好运行环境。",
             () => LaunchButton(),
             BubbleSide.Right),
-        new("版本都在「版本库」",
-            "装 Minecraft、装 Mod 整合包、切加载器都在这里。\n\n点进去选版本和加载器，再点「快速安装」就会自动下载。",
-            "整合包、Mod、光影可以在「资源中心」里直接装，依赖会自动补全。",
-            () => NavAt(1)),
-        new("「资源中心」装 Mod 和整合包",
+        new("版本都在首页的「版本列表」",
+            "装 Minecraft、装 Mod 整合包、切加载器都在这里。\n\n点进去选版本和加载器，再点「安装」就会自动下载。",
+            "整合包、Mod、光影可以在「资源」里直接装，依赖会自动补全。",
+            () => QuickVersionsCard()),
+        new("「资源」装 Mod 和整合包",
             "搜索整合包、Mod、光影、皮肤，点一下就能装进当前版本。\n\n模组之间的依赖关系会自动处理，不用手动下前置。",
             "皮肤库支持 3D 预览，装之前能先看看效果。",
-            () => NavAt(4)),
-        new("「联机大厅」和朋友联机",
+            () => NavAt(2)),
+        new("「联机」和朋友联机",
             "开房：在游戏里开单人世界 → 开放到局域网 → 启动器会自动把房间发到大厅。\n\n加入：在这里点「加入房间」，或者直接用朋友发来的房间码。",
             "加了好友之后，可以从好友列表一键进对方的房间。",
-            () => NavAt(3)),
+            () => NavAt(1)),
         new("主题和设置都在「设置」",
             "换主题、调内存、改下载源、开关动画效果都在「设置」里。\n\n遇到问题先看「帮助」页的日志分析，它会直接告诉你原因和怎么解决。",
             "就这些，点「开始使用」自己去玩吧。",
-            () => NavAt(5))
+            () => NavAt(3))
     ];
 }

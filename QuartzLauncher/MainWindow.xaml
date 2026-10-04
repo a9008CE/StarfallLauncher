@@ -1,4 +1,4 @@
-﻿<Window x:Class="QuartzLauncher.MainWindow"
+<Window x:Class="QuartzLauncher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="clr-namespace:QuartzLauncher.Services"
@@ -78,6 +78,9 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
+                            <!-- 版本号单独一行：以前它和账号栏挤在同一格，声明顺序又靠后，
+                                 结果铺满整格把账号栏的点击全吃掉了（点头像没反应）。 -->
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
@@ -140,11 +143,22 @@
                 </StackPanel>
             </RadioButton>
             <RadioButton x:Name="MPNavLobby" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         AutomationProperties.Name="大厅"
                          IsChecked="True" Click="MPNavLobby_Click">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                     <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="15"
                                Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock Text="大厅" VerticalAlignment="Center"/>
+                </StackPanel>
+            </RadioButton>
+            <!-- 服务器并进「联机」：原来它是主侧栏单独一项 -->
+            <RadioButton x:Name="MPNavServers" Style="{DynamicResource NavBtn}" GroupName="MpNav"
+                         AutomationProperties.Name="服务器"
+                         Click="MPNavServers_Click">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                    <TextBlock Text="&#xE950;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                               Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="服务器" VerticalAlignment="Center"/>
                 </StackPanel>
             </RadioButton>
             <RadioButton x:Name="MPNavChat" Style="{DynamicResource NavBtn}" GroupName="MpNav"
@@ -175,6 +189,7 @@
 
         <StackPanel x:Name="NavStack" Loaded="NavStack_Loaded">
                                 <RadioButton Style="{DynamicResource NavBtn}" IsChecked="True"
+                                             AutomationProperties.Name="首页"
                                              Click="NavHome_Click">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                                         <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -184,46 +199,31 @@
                                     </StackPanel>
                                  </RadioButton>
                                  <RadioButton Style="{DynamicResource NavBtn}"
-                                              Click="NavVersions_Click">
+                                              AutomationProperties.Name="联机"
+                                              Click="NavMultiplayer_Click">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                                        <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                        <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets" FontSize="15"
                                                    Width="22" TextAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                     <TextBlock Text="版本库" VerticalAlignment="Center"/>
-                                </StackPanel>
+                                                   Margin="0,0,10,0"/>
+                                        <TextBlock Text="联机" VerticalAlignment="Center"/>
+                                        <!-- 未读私聊红点 -->
+                                        <Ellipse x:Name="MultiplayerUnreadDot" Width="8" Height="8"
+                                                 Fill="#FF3B30" Margin="6,0,0,0"
+                                                 VerticalAlignment="Center" Visibility="Collapsed"/>
+                                    </StackPanel>
                             </RadioButton>
                             <RadioButton Style="{DynamicResource NavBtn}"
-                                         Click="NavServers_Click">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                                    <TextBlock Text="&#xE950;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                               Width="22" TextAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Text="服务器" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </RadioButton>
-                            <RadioButton Style="{DynamicResource NavBtn}"
-                                         Click="NavMultiplayer_Click">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                                    <TextBlock Text="&#xE716;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                               Width="22" TextAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Text="联机大厅" VerticalAlignment="Center"/>
-                                    <!-- 未读私聊红点 -->
-                                    <Ellipse x:Name="MultiplayerUnreadDot" Width="8" Height="8"
-                                             Fill="#FF3B30" Margin="6,0,0,0"
-                                             VerticalAlignment="Center" Visibility="Collapsed"/>
-                                </StackPanel>
-                            </RadioButton>
-                            <RadioButton Style="{DynamicResource NavBtn}"
+                                         AutomationProperties.Name="资源"
                                          Click="NavModBrowser_Click">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                                     <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" FontSize="15"
                                                Width="22" TextAlignment="Center" VerticalAlignment="Center"
                                                Margin="0,0,10,0"/>
-                                    <TextBlock Text="资源中心" VerticalAlignment="Center"/>
+                                    <TextBlock Text="资源" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Style="{DynamicResource NavBtn}"
+                                         AutomationProperties.Name="设置"
                                          Click="NavSettings_Click">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
                                     <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="15"
@@ -232,30 +232,68 @@
                                     <TextBlock Text="设置" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton Style="{DynamicResource NavBtn}"
-                                         Click="NavHelp_Click">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                                    <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                               Width="22" TextAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Text="帮助" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </RadioButton>
-                            <RadioButton Style="{DynamicResource NavBtn}"
-                                         Click="NavMore_Click">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
-                                    <TextBlock Text="&#xE712;" FontFamily="Segoe MDL2 Assets" FontSize="15"
-                                               Width="22" TextAlignment="Center" VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
-                                    <TextBlock Text="更多功能" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </RadioButton>
                         </StackPanel>
                         </StackPanel>
 
+                        <!-- 侧栏底部账号栏：点击调出登录切换窗（浮层在 HomePage 里）。
+                             用 Button 而不是 Border：Border 没有 automation peer，
+                             读屏和自动化都够不着它，键盘也点不到。 -->
+                        <Button x:Name="SidebarProfile" Grid.Row="4" Margin="12,0,12,10" Padding="10,9"
+                                Cursor="Hand" Click="SidebarProfile_Click"
+                                AutomationProperties.Name="账号栏"
+                                HorizontalContentAlignment="Stretch"
+                                FocusVisualStyle="{x:Null}"
+                                ToolTip="点击切换登录方式">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="ProfileCard"
+                                            CornerRadius="{DynamicResource CardCornerRadius}"
+                                            Background="Transparent"
+                                            Padding="{TemplateBinding Padding}"
+                                            SnapsToDevicePixels="True">
+                                        <ContentPresenter/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ProfileCard" Property="Background"
+                                                    Value="{DynamicResource NavActiveBgBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="ProfileCard" Property="Opacity" Value="0.7"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- 方形直角头像，与主题渐变主色一致 -->
+                                <Border Grid.Column="0" x:Name="SidebarProfileAvatarHost" Width="38" Height="38"
+                                        CornerRadius="0" Background="{DynamicResource PrimaryBrush}">
+                                    <TextBlock x:Name="SidebarProfileAvatar" Text="?" Foreground="White"
+                                               FontSize="16" FontWeight="Bold"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="SidebarProfileName" Text="未登录" FontSize="13"
+                                               FontWeight="SemiBold" Foreground="{DynamicResource TextBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                        <Ellipse x:Name="SidebarProfileDot" Width="6" Height="6"
+                                                 Fill="{DynamicResource SuccessBrush}" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="SidebarProfileStatus" Text="离线登录" FontSize="10.5"
+                                                   Margin="5,0,0,0" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextMutedBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
                         <TextBlock x:Name="SidebarVersionText" Grid.Row="3" Text="{x:Static services:UpdateService.DisplayVersion}" FontSize="10"
                                    FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}"
-                                   Margin="24,0,24,8" Opacity="0.6"/>
+                                   Margin="24,0,24,6" Opacity="0.6" Visibility="Collapsed"/>
                     </Grid>
                 </Border>
 
