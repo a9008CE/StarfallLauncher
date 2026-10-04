@@ -74,6 +74,17 @@
                             <TextBlock Text="皮肤/预览" VerticalAlignment="Center"/>
                         </StackPanel>
                     </RadioButton>
+                    <!-- 帮助：改版时从侧栏撤掉后只留在首页那张快捷卡上，用户找不到。
+                         这里补一个入口 —— HelpPage 本身就是 Page，跟上面几项一样塞进内容区即可。 -->
+                    <RadioButton x:Name="NavHelp" Style="{DynamicResource NavBtn}" GroupName="MoreNav"
+                                 AutomationProperties.Name="帮助"
+                                 Click="NavHelp_Click">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                            <TextBlock Text="&#xE946;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                       Width="22" TextAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="帮助" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </RadioButton>
                 </StackPanel>
 
                 <StackPanel DockPanel.Dock="Bottom" Margin="24,0,24,8">

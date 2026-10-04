@@ -164,6 +164,10 @@ public partial class MorePage : Page, IStandaloneSidebarPage
     private void NavPreset5_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new DownloadCenterPage(true)); }
     private void NavPreset6_Click(object sender, RoutedEventArgs e) { SetFooterHint(true); NavigateContent(new SkinPreviewPage()); }
 
+    // 帮助：改版时从侧栏撤掉后只留在首页那张快捷卡上，用户反馈「找不到」。
+    // HelpPage 本身就是 Page，跟上面几项一样塞进内容区即可，不用动导航逻辑。
+    private void NavHelp_Click(object sender, RoutedEventArgs e) { SetFooterHint(false); NavigateContent(new HelpPage()); }
+
     public void NavigateToSkinLibrary() { SetFooterHint(true); NavigateContent(new SkinLibraryPage()); }
     public void NavigateToSkinPreview() { SetFooterHint(true); NavigateContent(new SkinPreviewPage()); }
 }
