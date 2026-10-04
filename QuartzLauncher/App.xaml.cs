@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -13,11 +14,46 @@ public partial class App : Application
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern bool SetDllDirectory(string? pathName);
 
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    private const int SwRestore = 9;
+
+    /// <summary>
+    /// 单实例互斥体。必须活到进程结束，否则会被 GC 回收导致锁提前释放。
+    /// </summary>
+    private static Mutex? _singleInstanceMutex;
+
     public static AppPaths Paths { get; private set; } = null!;
     public static SettingsService Settings { get; private set; } = null!;
     public static ThemeManager Theme { get; private set; } = null!;
 
     private static readonly string LogFile = Path.Combine(AppContext.BaseDirectory, "Launcher", "crash.log");
+
+    /// <summary>
+    /// 把已在运行的那个实例的窗口拉到前台。找不到就什么也不做。
+    /// </summary>
+    private static void ActivateRunningInstance()
+    {
+        try
+        {
+            var self = Process.GetCurrentProcess();
+            foreach (var other in Process.GetProcessesByName(self.ProcessName))
+            {
+                if (other.Id == self.Id || other.MainWindowHandle == IntPtr.Zero) continue;
+                ShowWindow(other.MainWindowHandle, SwRestore);
+                SetForegroundWindow(other.MainWindowHandle);
+                return;
+            }
+        }
+        catch
+        {
+            // 拿不到别的进程就静默退出，不影响本次启动
+        }
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -57,6 +93,17 @@ public partial class App : Application
                 {
                     try { File.AppendAllText(LogFile, $"[{DateTime.Now}] UPDATE-SERVER: {ex.Message}\n\n"); } catch { }
                 }
+                Shutdown();
+                return;
+            }
+
+            // 单实例保护：已经在跑就直接把那个窗口拉到前台，然后退出。
+            // 放在参数分支之后 —— --apply-update / --update-server 是合法的辅助进程，不能拦。
+            // 没有这道锁时连点图标会开出一堆窗口（实测同屏跑到 8 个）。
+            _singleInstanceMutex = new Mutex(true, @"Local\QuartzLauncher.SingleInstance", out var isFirstInstance);
+            if (!isFirstInstance)
+            {
+                ActivateRunningInstance();
                 Shutdown();
                 return;
             }
@@ -115,6 +162,9 @@ public partial class App : Application
         {
             try { File.AppendAllText(LogFile, $"[{DateTime.Now}] EXIT: {ex}\n\n"); } catch { }
         }
+        try { _singleInstanceMutex?.ReleaseMutex(); } catch { }
+        try { _singleInstanceMutex?.Dispose(); } catch { }
+        _singleInstanceMutex = null;
         base.OnExit(e);
     }
 }

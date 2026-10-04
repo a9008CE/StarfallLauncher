@@ -6,6 +6,13 @@ namespace QuartzLauncher.Services;
 
 public class SettingsService
 {
+    // 曾经用过、现已下线的更新源。用户配置里存着它们时会永远检查不到更新，必须迁移掉。
+    private static readonly string[] RetiredUpdateUrls =
+    {
+        "https://starfall-updater.tail309cd1.ts.net/update.json",
+        "http://starfall-updater.tail309cd1.ts.net/update.json",
+    };
+
     private readonly AppPaths _paths;
     public Settings Data { get; private set; }
 
@@ -29,6 +36,16 @@ public class SettingsService
             var data = JsonConvert.DeserializeObject<Settings>(json) ?? new Settings();
             if (string.IsNullOrWhiteSpace(data.UpdateManifestUrl))
                 data.UpdateManifestUrl = Settings.DefaultUpdateManifestUrl;
+            // 已停止服务的旧更新源一律退役到官方地址。
+            // 否则老用户升级后仍然去打那台下线的机器：检查永远失败、公告永远不刷新，而界面上什么错都不报。
+            for (var i = 0; i < RetiredUpdateUrls.Length; i++)
+            {
+                if (string.Equals(data.UpdateManifestUrl, RetiredUpdateUrls[i], StringComparison.OrdinalIgnoreCase))
+                {
+                    data.UpdateManifestUrl = Settings.DefaultUpdateManifestUrl;
+                    break;
+                }
+            }
             if (data.PageAnimationStyle == "cinematic")
             {
                 data.PageAnimationStyle = "slide";

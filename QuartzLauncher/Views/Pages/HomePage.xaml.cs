@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -50,6 +50,9 @@ public partial class HomePage : Page
         // 只初始化一次：避免从下载管理页返回首页时重置启动进度条
         Loaded -= OnLoaded;
         RefreshAnnouncement();
+        // 后台补拉公告：本地文件缺失或停留在旧版本时自愈，拉到后刷新面板。
+        // 不 await —— 网络慢不能拖住首页渲染。
+        _ = RefreshAnnouncementFromServerAsync();
         SetLogPanelExpanded(false, animate: false);
         RefreshProfile();
         RefreshInstances();
@@ -73,6 +76,25 @@ public partial class HomePage : Page
             _announcementKey,
             StringComparison.Ordinal);
         SetAnnouncementContentVisible(!_announcementRead);
+    }
+
+    /// <summary>
+    /// 启动时在后台补拉一次公告。拉到新版本会覆盖本地文件，然后重刷面板。
+    /// 任何失败都不影响首页（本地已有的公告继续显示）。
+    /// </summary>
+    private async Task RefreshAnnouncementFromServerAsync()
+    {
+        try
+        {
+            var url = App.Settings.Data.UpdateManifestUrl;
+            if (string.IsNullOrWhiteSpace(url)) return;
+            await UpdateService.RefreshAnnouncementAsync(url).ConfigureAwait(true);
+            RefreshAnnouncement();
+        }
+        catch
+        {
+            // 离线等情况静默忽略
+        }
     }
 
     private void SetAnnouncementContentVisible(bool visible)
