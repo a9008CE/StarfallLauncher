@@ -199,6 +199,16 @@
                                     </StackPanel>
                                  </RadioButton>
                                  <RadioButton Style="{DynamicResource NavBtn}"
+                                              AutomationProperties.Name="版本库"
+                                              Click="NavVersions_Click">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                                        <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                                   Width="22" TextAlignment="Center" VerticalAlignment="Center"
+                                                   Margin="0,0,10,0"/>
+                                        <TextBlock Text="版本库" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                 </RadioButton>
+                                 <RadioButton Style="{DynamicResource NavBtn}"
                                               AutomationProperties.Name="联机"
                                               Click="NavMultiplayer_Click">
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">

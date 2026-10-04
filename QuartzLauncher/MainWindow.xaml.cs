@@ -1216,15 +1216,22 @@ public partial class MainWindow : Window
     /// </summary>
     private void SelectNavButton(Page page)
     {
+        // 侧栏顺序（5 项）：0 首页 / 1 版本库 / 2 联机 / 3 资源 / 4 设置
+        // ⚠️ 加/减侧栏项时这里必须同步，否则高亮会指到别的项上。
+        // 也别忘同步 FirstRunGuide.cs —— 它按序号取侧栏项。
+        // ⚠️ 这里必须写成 `page is HomePage || page is HelpPage`，不能写成
+        //    `page is HomePage or HelpPage` —— 本类有个 `public HomePage HomePage` 属性，
+        //    在 `or` 组合模式里 `HomePage` 会解析成那个**属性**而不是类型，
+        //    报 CS9135「应为 'Page' 类型的常量值」。
         int idx;
-        if (page is HomePage) idx = 0;
-        else if (page is MultiplayerPage or ServerBrowserPage) idx = 1;
-        else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 2;
-        else if (page is SettingsPage or MorePage or ThemeDetailPage or AnimationSettingsPage
-                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage) idx = 3;
+        if (page is HomePage || page is HelpPage) idx = 0;
         else if (page is VersionsPage or LocalVersionsPage or VersionSettingsPage or LoaderPickerPage
                   or LoaderDetailPage or InstanceDetailPage or ModsPage or SavesPage or ResourcePacksPage
-                  or ShaderPacksPage or PresetPage or HelpPage) idx = 0;
+                  or ShaderPacksPage or PresetPage) idx = 1;
+        else if (page is MultiplayerPage or ServerBrowserPage) idx = 2;
+        else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 3;
+        else if (page is SettingsPage or MorePage or ThemeDetailPage or AnimationSettingsPage
+                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage) idx = 4;
         else return;
 
         for (var i = 0; i < NavStack.Children.Count; i++)
