@@ -134,8 +134,20 @@ public static class ThemeBackgroundService
         return presets[chosen];
     }
 
+    /// <summary>
+    /// 用户是否明确要过背景图。
+    /// 以前没选也会自动回落到图库第一张，结果是"想关掉壁纸都没办法"；
+    /// 而浅色毛玻璃的稿子本来就是纯色底（卡片已经做实心了，再垫层壁纸只会让空隙发花）。
+    /// 想开回来：在主题详情里点一张预设图（= 固定），或者打开背景轮播。
+    /// </summary>
+    public static bool IsBackgroundEnabled(Settings settings)
+        => settings.ThemeBackgroundCarousel
+           || !string.IsNullOrWhiteSpace(settings.ThemeBackgroundImage);
+
     public static Brush? TryCreateBrush(Settings settings, string baseColor, bool isLight)
     {
+        if (!IsBackgroundEnabled(settings)) return null;
+
         var path = ResolveActivePath(settings);
         if (path is null) return null;
 

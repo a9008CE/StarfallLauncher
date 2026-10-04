@@ -27,7 +27,7 @@ public class Settings
     public string AuthInjectorPath { get; set; } = "";
     public string AuthAvatarPath { get; set; } = "";
     public string CustomSkinPath { get; set; } = "";
-    public string ThemeName { get; set; } = "默认深蓝";
+    public string ThemeName { get; set; } = "默认";
     public string ThemePrimary { get; set; } = "";
     public string ThemeBg { get; set; } = "";
     public string ThemeCard { get; set; } = "";
@@ -44,8 +44,9 @@ public class Settings
     public int ThemeBackgroundIndex { get; set; }
     public string ThemeDanger { get; set; } = "";
     public string ThemeSuccess { get; set; } = "";
-    public string ThemeMode { get; set; } = "dark";
-    public string UiStyle { get; set; } = "minimal";
+    public string ThemeMode { get; set; } = "light";
+    /// <summary>开箱风格 = 浅色科技（毛玻璃 + 浅色）。在 UI 风格列表里叫「默认」且排第一。</summary>
+    public string UiStyle { get; set; } = "frosted";
     public string DownloadSource { get; set; } = "hybrid_priority";
     public string VersionIsolationMode { get; set; } = VersionIsolationModes.All;
     public bool AutoMemory { get; set; } = false;

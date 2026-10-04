@@ -18,14 +18,20 @@ public partial class ThemeDetailPage : Page
     private CancellationTokenSource? _presetGalleryCts;
     private int _presetGalleryGeneration;
 
-    private static readonly Dictionary<string, string> UiStyleLabels = new()
-    {
-        ["minimal"] = "极简深色",
-        ["frosted"] = "毛玻璃",
-        ["flat"] = "扁平浅色",
-        ["cyberpunk"] = "赛博朋克 2077",
-        ["wanderingearth"] = "流浪地球 550W",
-    };
+    /// <summary>
+    /// UI 风格列表。
+    /// 用数组而不是 Dictionary：Dictionary 的遍历顺序是不保证的，「哪个排最前」
+    /// 不能靠插入顺序碰运气。
+    /// frosted 排第一、并且就叫「默认」—— 它就是启动器开箱的样子（浅色科技）。
+    /// </summary>
+    private static readonly (string Key, string Label)[] UiStyles =
+    [
+        ("frosted", "默认"),
+        ("minimal", "极简深色"),
+        ("flat", "扁平浅色"),
+        ("cyberpunk", "赛博朋克 2077"),
+        ("wanderingearth", "流浪地球 550W"),
+    ];
 
     public ThemeDetailPage()
     {
@@ -86,7 +92,7 @@ public partial class ThemeDetailPage : Page
         UiStylePanel.Children.Clear();
         var current = App.Settings.Data.UiStyle;
 
-        foreach (var (key, label) in UiStyleLabels)
+        foreach (var (key, label) in UiStyles)
         {
             var btn = new Button
             {
@@ -384,9 +390,26 @@ public partial class ThemeDetailPage : Page
     {
         var data = App.Settings.Data;
         var count = ThemeBackgroundService.GetPresets().Count;
-        CarouselStatus.Text = data.ThemeBackgroundCarousel
-            ? $"每 {data.ThemeBackgroundCarouselSeconds} 秒切换一张，共 {count} 张预设"
-            : "关闭时按预设图库的第一张显示；点击某张缩略图即可固定";
+
+        if (data.ThemeBackgroundCarousel)
+        {
+            CarouselStatus.Text = $"每 {data.ThemeBackgroundCarouselSeconds} 秒切换一张，共 {count} 张预设";
+            return;
+        }
+
+        // 没固定、也没开轮播 = 纯色底。
+        // 以前这里写「关闭时按预设图库的第一张显示」——那是旧行为；
+        // 现在壁纸要用户明确选过才铺（见 ThemeBackgroundService.IsBackgroundEnabled），
+        // 所以关掉轮播之后不会自己冒出一张图来。
+        var pinned = string.IsNullOrWhiteSpace(data.ThemeBackgroundImage)
+            ? null
+            : System.IO.Path.GetFileName(data.ThemeBackgroundImage);
+
+        CarouselStatus.Text = pinned is not null
+            ? $"已固定：{pinned}；点「取消固定」回到纯色底"
+            : count > 0
+                ? $"当前是纯色底；点下面任意一张缩略图即可铺成背景（共 {count} 张）"
+                : "当前是纯色底；可以先「下载官方预设图」，再挑一张";
     }
 
     private void OpenBackgroundFolder_Click(object sender, RoutedEventArgs e)

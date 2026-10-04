@@ -9,14 +9,9 @@
         <Setter Property="BorderThickness" Value="{DynamicResource CardBorderThickness}"/>
         <Setter Property="CornerRadius" Value="{DynamicResource CardCornerRadius}"/>
         <Setter Property="Padding" Value="{DynamicResource CardPadding}"/>
-        <Setter Property="Effect">
-            <Setter.Value>
-                <DropShadowEffect BlurRadius="{DynamicResource CardShadowBlur}"
-                                  ShadowDepth="{DynamicResource CardShadowDepth}"
-                                  Opacity="{DynamicResource CardShadowOpacity}"
-                                  Color="{DynamicResource CardShadowColor}"/>
-            </Setter.Value>
-        </Setter>
+        <!-- 投影挂在资源上而不是写死：浅色毛玻璃给 null（详见 ThemeManager 里的说明）。
+             DropShadowEffect 会让每张卡走一遍离屏模糊，切页动画逐帧重算，很贵。 -->
+        <Setter Property="Effect" Value="{DynamicResource CardShadowEffect}"/>
     </Style>
 
     <Style x:Key="BtnBase" TargetType="Button">
