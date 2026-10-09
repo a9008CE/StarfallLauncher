@@ -85,6 +85,10 @@ public class SettingsService
         portable.ThemeBackgroundImage = StorePortableFile(Data.ThemeBackgroundImage, "backgrounds");
         var json = JsonConvert.SerializeObject(portable, Formatting.Indented);
         File.WriteAllText(_paths.ConfigFile, json);
+
+        // 皮肤文件可能刚被换掉：登录状态下顺手同步给账号（内部有「没变就不发」的判断，
+        // 所以这里被高频调用也不会反复上传）
+        AccountService.Current?.QueueSkinSync();
     }
 
     private static void ResolvePortablePaths(Settings settings)

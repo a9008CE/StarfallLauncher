@@ -12,7 +12,8 @@ using System.Windows.Media.Imaging;
 namespace QuartzLauncher.Services;
 
 /// <summary>好友（按永久编码建立关系，名字是对方当前游戏 ID）。</summary>
-public sealed record AccountFriend(string Code, string Name, bool Online, string Room = "", bool RoomLocked = false);
+public sealed record AccountFriend(string Code, string Name, bool Online, string Room = "", bool RoomLocked = false,
+    string Skin = "");
 
 /// <summary>一条聊天消息。</summary>
 public sealed record ChatMessage(string Channel, string From, string Text, long Timestamp, bool Filtered,
@@ -37,6 +38,9 @@ public sealed class ChatClient : IDisposable
     public string Name { get; private set; }
     public string SenderCode { get; set; } = "";
     public bool IsConnected => false;
+
+    /// <summary>最近一次连接失败的原因（占位实现恒为 null —— 不会去连，也就不会失败）。</summary>
+    public string? LastError { get; private set; }
 
     public event Action<ChatMessage>? MessageReceived;
     public event Action<string>? ErrorReceived;
@@ -120,6 +124,14 @@ public sealed class AccountService
         => Task.FromResult<string?>("联机模块不包含在开源内容中");
 
     public Task<bool> RefreshFriendsAsync() => Task.FromResult(false);
+
+    public Task<bool> SyncSkinAsync(bool force = false) => Task.FromResult(false);
+
+    public Task<string?> ClearSkinAsync() => Task.FromResult<string?>("联机模块不包含在开源内容中");
+
+    public void QueueSkinSync(bool force = false) { }
+
+    public void QueueSkinRefresh() { }
 
     public Task<string?> RegisterAsync(string email, string password, string name)
         => Task.FromResult<string?>("联机模块不包含在开源内容中");
@@ -282,5 +294,12 @@ public static class AvatarService
         => Task.FromResult<string?>(null);
 
     public static BitmapSource? TryCropFace(string? skinPath) => null;
+
+    public static Task<string?> GetNormalizedSkinBase64Async(CancellationToken token = default)
+        => Task.FromResult<string?>(null);
+
+    public static bool IsUsableSkinBase64(string? base64) => false;
+
+    public static BitmapSource? TryCropFaceFromBase64(string? base64) => null;
 }
 #endif

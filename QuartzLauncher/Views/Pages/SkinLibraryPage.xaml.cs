@@ -145,6 +145,8 @@ public partial class SkinLibraryPage : Page
             {
                 App.Settings.Data.CustomSkinPath = "";
                 App.Settings.Save();
+                // 用户把正在用的皮肤删了：服务器上那份也要跟着撤掉
+                AccountService.Current?.QueueSkinRefresh();
             }
             File.Delete(path);
             RefreshLibrary();

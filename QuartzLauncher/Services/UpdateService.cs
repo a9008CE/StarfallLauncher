@@ -53,8 +53,12 @@ public static class UpdateService
         };
     }
 
-    public static bool IsLocalServerRunning(int port = 29071) => false;
+    /// <summary>
+    /// 【开源版占位实现】不联网补拉公告：直接返回，界面继续用本地/兜底文案。
+    /// </summary>
+    public static Task RefreshAnnouncementAsync(string manifestUrl) => Task.CompletedTask;
 
+    public static bool IsLocalServerRunning(int port = 29071) => false;
     public static void EnsureLocalServerRunning()
     {
     }

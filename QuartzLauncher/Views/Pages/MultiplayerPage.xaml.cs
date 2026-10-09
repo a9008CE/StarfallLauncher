@@ -569,7 +569,7 @@ public partial class MultiplayerPage : Page
         window.ShowDialog();
     }
 
-    private Border BuildChatAvatar(string name, ChatClient? source = null)
+    private Border BuildChatAvatar(string name, ChatClient? source = null, string? skinBase64 = null)
     {
         source ??= _chat;
         var avatar = new Border
@@ -581,8 +581,32 @@ public partial class MultiplayerPage : Page
             VerticalAlignment = VerticalAlignment.Top
         };
 
+        // 好友上报过皮肤就用皮肤的脸，否则退回原来的世界聊天头像 / 字母头像
+        if (!string.IsNullOrWhiteSpace(skinBase64))
+        {
+            var skinKey = "skin#" + name + "#" + skinBase64.Length + "#" + skinBase64.GetHashCode();
+            if (AvatarBrushCache.TryGetValue(skinKey, out var skinBrush))
+            {
+                avatar.Background = skinBrush;
+            }
+            else
+            {
+                var face = AvatarService.TryCropFaceFromBase64(skinBase64);
+                if (face != null)
+                {
+                    var brush = new System.Windows.Media.ImageBrush(face) { Stretch = Stretch.UniformToFill };
+                    RenderOptions.SetBitmapScalingMode(brush, System.Windows.Media.BitmapScalingMode.NearestNeighbor);
+                    brush.Freeze();
+                    AvatarBrushCache[skinKey] = brush;
+                    avatar.Background = brush;
+                    if (AvatarBrushCache.Count > 300)
+                        AvatarBrushCache.Clear();
+                }
+            }
+        }
+
         var data = source?.GetAvatar(name) ?? _chat?.GetAvatar(name);
-        if (!string.IsNullOrWhiteSpace(data))
+        if (avatar.Background == null && !string.IsNullOrWhiteSpace(data))
         {
             // 画刷按「名字 + 头像内容」缓存，避免每次刷新都重新解码 base64（这是卡顿主因）
             var key = name + "#" + data.Length + "#" + data.GetHashCode();
@@ -1772,7 +1796,7 @@ public partial class MultiplayerPage : Page
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-                var avatar = BuildChatAvatar(friend.Name);
+                var avatar = BuildChatAvatar(friend.Name, null, friend.Skin);
                 avatar.Width = 36;
                 avatar.Height = 36;
                 Grid.SetColumn(avatar, 0);

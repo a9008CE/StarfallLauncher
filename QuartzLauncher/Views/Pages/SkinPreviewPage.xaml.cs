@@ -257,6 +257,8 @@ public partial class SkinPreviewPage : Page
     {
         App.Settings.Data.CustomSkinPath = "";
         App.Settings.Save();
+        // 同上：撤掉服务器上那份，别让好友继续看到旧头像
+        AccountService.Current?.QueueSkinRefresh();
         LoadCurrentSkin();
     }
 
