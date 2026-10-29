@@ -1,4 +1,4 @@
-#if !FULL_BUILD
+﻿#if !FULL_BUILD
 namespace QuartzLauncher.Services;
 
 public sealed record ServerDirectoryItem(
@@ -19,7 +19,7 @@ public sealed record ServerDirectoryResult(List<ServerDirectoryItem> Items, int 
 /// </summary>
 public static class MinecraftServerDirectoryService
 {
-    public static Task<ServerDirectoryResult> GetOnlineServersAsync(int page = 1)
+    public static Task<ServerDirectoryResult> GetOnlineServersAsync(int page = 1, bool showModOnly = false)
         => Task.FromResult(new ServerDirectoryResult(new List<ServerDirectoryItem>(), page, 0));
 }
 #endif

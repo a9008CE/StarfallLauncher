@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.WebsiteSitesPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.WebsiteSitesPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Background="Transparent">
@@ -7,6 +7,9 @@
             <TextBlock Text="WEB SITES" Style="{DynamicResource PageEyebrow}"/>
             <TextBlock Text="网站站点" Style="{DynamicResource PageTitle}"/>
             <TextBlock Text="快速打开 Minecraft、Mod 资源和相关管理页面。" Style="{DynamicResource PageSubtitle}"/>
+
+            <TextBlock Text="星落站点" Style="{DynamicResource SectionHeader}" Margin="0,22,0,8"/>
+            <WrapPanel x:Name="StarfallSitesPanel"/>
 
             <TextBlock Text="常用资源站" Style="{DynamicResource SectionHeader}" Margin="0,22,0,8"/>
             <WrapPanel x:Name="ResourceSitesPanel"/>

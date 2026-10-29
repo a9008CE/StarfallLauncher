@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -6,6 +6,7 @@ using System.Windows.Input;
 using Microsoft.Win32;
 using QuartzLauncher.Models;
 using QuartzLauncher.Services;
+using QuartzLauncher.Views;
 
 namespace QuartzLauncher.Views.Pages;
 
@@ -40,6 +41,7 @@ public partial class SettingsPage : Page
             ? Settings.DefaultUpdateManifestUrl
             : s.UpdateManifestUrl;
         RunAsUpdateServerCheck.IsChecked = s.RunAsUpdateServer;
+        RefreshKeybindSummary();
 
         for (var i = 0; i < VersionIsolationCombo.Items.Count; i++)
         {
@@ -344,6 +346,51 @@ public partial class SettingsPage : Page
         JavaInfoText.Text = App.Settings.Data.AutoSelectJava
             ? "已开启按 Minecraft 版本自动选择 Java。"
             : "已关闭自动选择，将使用当前选择的 Java。";
+    }
+
+    /// <summary>「问题反馈」卡片：跳到反馈页。</summary>
+    private void OpenFeedback_Click(object sender, MouseButtonEventArgs e)
+        => (Window.GetWindow(this) as MainWindow)?.NavigateToFeedback();
+
+    /// <summary>「键位设置」卡片：点开编辑弹窗（键位按实例写入，所以要有选中实例）。</summary>
+    private void OpenKeybindDialog_Click(object sender, MouseButtonEventArgs e)
+    {
+        var owner = Window.GetWindow(this);
+        var instance = (owner as MainWindow)?.HomePage?.SelectedInstance;
+        if (instance == null)
+        {
+            AnimatedMessageBox.Show("请先在首页选择一个版本 —— 键位方案是按实例写入的。", "提示");
+            return;
+        }
+
+        var gameRoot = InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
+        var edited = KeybindDialog.Show(owner, gameRoot, App.Settings.Data.Keybinds,
+            App.Settings.Data.KeybindsEnabled);
+        if (edited == null) return;
+
+        // 只保存原版键位（弹窗已经过滤过，这里再兜一层）
+        App.Settings.Data.Keybinds = edited.Binds
+            .Where(pair => KeybindService.IsVanillaId(pair.Key))
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        App.Settings.Data.KeybindsEnabled = edited.Enabled;
+        App.Settings.Save();
+        RefreshKeybindSummary();
+    }
+
+    private void RefreshKeybindSummary()
+    {
+        var binds = App.Settings.Data.Keybinds;
+        var enabled = App.Settings.Data.KeybindsEnabled;
+        if (binds == null || binds.Count == 0)
+        {
+            KeybindSummaryText.Text = "未设置 · 使用游戏内键位";
+            return;
+        }
+        var conflicts = KeybindService.DetectConflicts(binds).Count;
+        var head = enabled ? "默认键位" : "默认键位（已关闭自动应用）";
+        KeybindSummaryText.Text = conflicts > 0
+            ? $"{head} · {binds.Count} 项 · {conflicts} 处冲突"
+            : $"{head} · {binds.Count} 项";
     }
 
     private void RefreshJavaList() => _ = RefreshJavaListAsync();

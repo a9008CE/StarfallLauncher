@@ -1,4 +1,4 @@
-#if !FULL_BUILD
+﻿#if !FULL_BUILD
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -78,8 +78,8 @@ public class ThemeManager
             ["InputBgBrushColor"] = ToColor(inputBg),
             ["CardShadowColor"] = ToColor(t.CardShadowColor),
 
-            ["BgBrush"] = customBackground ?? ToBrush(t.Bg),
-            ["WindowBackgroundBrush"] = customBackground ?? ToBrush(t.Bg),
+            ["BgBrush"] = customBackground ?? SignatureBackdrop.Create(t.Bg, t.Primary, isLight),
+            ["WindowBackgroundBrush"] = customBackground ?? SignatureBackdrop.Create(t.Bg, t.Primary, isLight),
             ["ContentBackgroundBrush"] = ToBrush(t.Bg),
             ["CardBrush"] = ToBrush(t.Card),
             ["DialogCardBrush"] = ToBrush(t.Card),
@@ -183,8 +183,8 @@ public class ThemeManager
         var t = Current;
         var isLight = _settings.Data.ThemeMode == "light";
         var custom = ThemeBackgroundService.TryCreateBrush(_settings.Data, t.Bg, isLight);
-        _colorDict["BgBrush"] = custom ?? ToBrush(t.Bg);
-        _colorDict["WindowBackgroundBrush"] = custom ?? ToBrush(t.Bg);
+        _colorDict["BgBrush"] = custom ?? SignatureBackdrop.Create(t.Bg, t.Primary, isLight);
+        _colorDict["WindowBackgroundBrush"] = custom ?? SignatureBackdrop.Create(t.Bg, t.Primary, isLight);
     }
 
     private void SyncCarouselTimer()

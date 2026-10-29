@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
@@ -252,7 +252,7 @@ public class MinecraftService
 
     public Task<string> LaunchAsync(Instance instance)
     {
-        var (java, args, cwd) = BuildCommand(instance);
+        var (java, args, cwd, _) = BuildCommand(instance);
         var psi = new ProcessStartInfo(java)
         {
             WorkingDirectory = cwd,
@@ -269,7 +269,7 @@ public class MinecraftService
         return Task.FromResult(process?.Id.ToString() ?? "");
     }
 
-    public (string java, List<string> args, string cwd) BuildCommand(
+    public (string java, List<string> args, string cwd, bool offlineSession) BuildCommand(
         Instance instance,
         string? selectedJavaPath = null,
         string? quickPlayServer = null)
@@ -291,6 +291,26 @@ public class MinecraftService
         var javaMajor = javaInfo.MajorVersion;
 
         var root = InstancePathService.EnsureGameDirectory(_paths, _settings.Data, instance);
+
+        // 启动前把「键位方案」写进该实例的 options.txt。
+        // 必须在 Process.Start 之前做：游戏退出时会把整份 options.txt 重写，
+        // 运行中/退出后写都等于白改。
+        if (_settings.Data.KeybindsEnabled && _settings.Data.Keybinds.Count > 0)
+        {
+            try
+            {
+                // 默认方案只含原版键位；这里再过滤一次，确保永远不会动 Mod 的键位
+                var vanillaBinds = _settings.Data.Keybinds
+                    .Where(pair => KeybindService.IsVanillaId(pair.Key))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value);
+                var keybindResult = KeybindService.Apply(root, vanillaBinds);
+                foreach (var warning in keybindResult.Warnings) { /* 无日志出口，静默跳过 */ }
+            }
+            catch
+            {
+                // 键位写失败不能挡住启动
+            }
+        }
         if (instance.AutoSetChinese) ApplyChineseLanguage(root);
         var tempDir = Path.Combine(_paths.Root, "temp");
         Directory.CreateDirectory(tempDir);
@@ -490,7 +510,9 @@ public class MinecraftService
             .Select(argument => ReplaceVariables(argument, variables)));
 
         var allArgs = jvmArgs.Concat(new[] { mainClass }).Concat(gameArgs).ToList();
-        return (java, allArgs, root);
+        // 第 4 个返回值：本次是否以离线会话启动（= 局域网世界将不做正版验证）。
+        // 首页用它判断「玩家刚勾了『允许非正版』但还没重启游戏」的情况。
+        return (java, allArgs, root, offlineForLan);
     }
 
     private static List<string> SplitLegacyArguments(string arguments)
@@ -636,6 +658,22 @@ public class MinecraftService
         for (var index = all.Count - 1; index >= 0; index--)
         {
             var library = all[index];
+
+            // 2026-10-27 修复「原版 1.12.2 启动即崩、连 logs/ 都建不出来」：
+            // 必须**先按当前平台过滤 rules、再去重**。
+            //
+            // 以前是先按 GetLibraryIdentity（group:artifact:classifier，**不含版本**）去重，
+            // 于是 1.12.2 / 1.11.2 / 1.10.2 / 1.9.4 / 1.8.9 这些同一个 JSON 里
+            // 同时声明 `lwjgl 2.9.4-nightly` 与 `lwjgl 2.9.2-nightly` 的版本会互相顶掉：
+            // 倒序取第一条 → 留下的是后面的 2.9.2，而 2.9.2 那条的 rules 是 `<os>osx</os>`，
+            // 在 Windows 上直接判定不通过 → 整条 LWJGL 被丢 → classpath 里一个 LWJGL 2 都没有
+            // → JVM 起来就 NoClassDefFoundError: org/lwjgl/LWJGLException，log4j 还没初始化，
+            //   所以游戏目录里连 logs/ 都没有，玩家侧表现为「原版启动失败崩溃」。
+            //
+            // 过滤顺序换过来之后：2.9.2（osx-only）先在 rules 阶段被排除，
+            // 2.9.4（无 rules，全平台）保留 → 正常进 classpath。
+            if (!RulesAllow(library.TryGetProperty("rules", out var libraryRules) ? libraryRules : null)) continue;
+
             var identity = GetLibraryIdentity(library);
             if (seen.Add(identity)) selected.Add(library);
         }

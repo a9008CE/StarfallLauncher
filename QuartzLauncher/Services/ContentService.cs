@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -115,6 +115,102 @@ public class ContentService
                 FileSize: fi.Length));
         }
         return result;
+    }
+
+    /// <summary>
+    /// 一个 Mod 文件现在**会不会被游戏加载**（2026-10-27 加）。
+    /// 游戏只认 .jar/.zip/.litemod；`.disabled` / `.old` 后缀的是被我们改过名的禁用项。
+    /// </summary>
+    public static bool IsEnabledModFile(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        return ext is ".jar" or ".zip" or ".litemod";
+    }
+
+    /// <summary>被禁用（`.disabled` / `.old` 结尾）的 Mod 文件。</summary>
+    public static bool IsDisabledModFile(string path)
+    {
+        var lower = path.ToLowerInvariant();
+        if (!lower.EndsWith(".disabled") && !lower.EndsWith(".old")) return false;
+        var inner = Path.GetExtension(lower[..^Path.GetExtension(lower).Length]).ToLowerInvariant();
+        return inner is ".jar" or ".zip" or ".litemod";
+    }
+
+    /// <summary>
+    /// 统计某个实例目录下「已启用 / 已禁用」的 Mod 数量。
+    /// 首页卡片和启动前自检都用它，保证**口径一致**（以前首页只数 .jar、Mod 页把禁用也算进去，
+    /// 玩家看到「列表里有 Mod、游戏里 0 Mod」时根本分不清）。
+    /// </summary>
+    public static (int Enabled, int Disabled) CountMods(string instanceRoot)
+    {
+        var modsDir = Path.Combine(instanceRoot, "mods");
+        if (!Directory.Exists(modsDir)) return (0, 0);
+        var enabled = 0;
+        var disabled = 0;
+        foreach (var file in Directory.EnumerateFiles(modsDir))
+        {
+            if (IsEnabledModFile(file)) enabled++;
+            else if (IsDisabledModFile(file)) disabled++;
+        }
+        return (enabled, disabled);
+    }
+
+    /// <summary>
+    /// 把实例里**所有**被禁用的 Mod 恢复启用（`.disabled`/`.old` 去掉后缀）。
+    /// 目标文件已存在时跳过（同名冲突不覆盖）。返回成功启用的数量。
+    /// </summary>
+    public static int EnableAllDisabled(string instanceRoot)
+    {
+        var modsDir = Path.Combine(instanceRoot, "mods");
+        if (!Directory.Exists(modsDir)) return 0;
+        var count = 0;
+        foreach (var file in Directory.EnumerateFiles(modsDir).ToList())
+        {
+            if (!IsDisabledModFile(file)) continue;
+            var target = file[..^Path.GetExtension(file).Length];
+            try
+            {
+                if (!File.Exists(target)) File.Move(file, target);
+            }
+            catch
+            {
+                // 单个文件失败（占用/权限）不能影响其它 Mod
+            }
+            if (File.Exists(target)) count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// 把 fromRoot/mods 里的 Mod 迁到 toRoot/mods（2026-10-27）。
+    /// 换布局（`versions/<id>` ↔ `instances/<id>`）时用：玩家的 Mod 在一处、游戏读另一处。
+    /// 同名的目标文件已存在就跳过（不覆盖）。跨盘/占用时退回复制+删除。返回迁移成功的数量。
+    /// </summary>
+    public static int MigrateMods(string fromRoot, string toRoot)
+    {
+        var from = Path.Combine(fromRoot, "mods");
+        var to = Path.Combine(toRoot, "mods");
+        if (!Directory.Exists(from) || string.Equals(Path.GetFullPath(from), Path.GetFullPath(to), StringComparison.OrdinalIgnoreCase))
+            return 0;
+        Directory.CreateDirectory(to);
+        var count = 0;
+        foreach (var file in Directory.EnumerateFiles(from).ToList())
+        {
+            if (!IsEnabledModFile(file) && !IsDisabledModFile(file)) continue;
+            var target = Path.Combine(to, Path.GetFileName(file));
+            if (File.Exists(target)) continue;
+            try
+            {
+                File.Move(file, target);
+            }
+            catch
+            {
+                try { File.Copy(file, target, false); File.Delete(file); }
+                catch { continue; }
+            }
+            count++;
+        }
+        return count;
     }
 
     public void AddMods(string instanceRoot, List<string> files)

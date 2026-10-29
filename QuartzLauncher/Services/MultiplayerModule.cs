@@ -133,7 +133,8 @@ public sealed record LobbyMod(string Name, long Size, string Sha1)
 
 public sealed record LobbyRoom(
     string Room, string Addr, string Owner, string Motd, string Mc, string Kind, string Loader,
-    int ModCount, int Players, int Max, bool Locked, int Port, List<LobbyMod> Mods)
+    int ModCount, int Players, int Max, bool Locked, int Port, List<LobbyMod> Mods,
+    bool AllowNonPremium = false)
 {
     public string TitleText => $"房间 {Room}";
     public string OwnerText => "未知";
@@ -142,6 +143,7 @@ public sealed record LobbyRoom(
     public string KindDetail => "未提供";
     public string PlayerText => "0/0";
     public string CodeText => Room;
+    public string PremiumText => AllowNonPremium ? "允许非正版" : "仅正版";
     public string ConnectAddress => "";
 }
 

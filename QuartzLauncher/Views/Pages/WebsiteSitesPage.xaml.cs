@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Windows;
@@ -14,6 +14,14 @@ public partial class WebsiteSitesPage : Page
 {
     private static readonly HttpClient IconHttp = CreateIconClient();
     private static readonly Dictionary<string, BitmapImage> IconCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>星落自己的站点：官网 / GitHub / 爱发电（爱发电用它的品牌紫）。</summary>
+    private static readonly WebsiteShortcut[] StarfallSites =
+    {
+        new() { Name = "星落官网", Url = "https://starfallmc.top/", Icon = "" },
+        new() { Name = "GitHub 仓库", Url = "https://github.com/a9008CE/StarfallLauncher", Icon = "", IconUrl = "https://github.com/favicon.ico" },
+        new() { Name = "爱发电", Url = "https://afdian.com/a/2840109628QQ", Icon = "", IconUrl = "https://afdian.com/favicon.ico" }
+    };
 
     private static readonly WebsiteShortcut[] ResourceSites =
     {
@@ -34,6 +42,7 @@ public partial class WebsiteSitesPage : Page
         InitializeComponent();
         Loaded += (_, _) =>
         {
+            BuildFixedSites(StarfallSitesPanel, StarfallSites);
             BuildFixedSites(ResourceSitesPanel, ResourceSites);
             BuildFixedSites(LauncherSitesPanel, LauncherSites);
             BuildCustomSites();
@@ -91,7 +100,15 @@ public partial class WebsiteSitesPage : Page
             FontSize = 16,
             VerticalAlignment = VerticalAlignment.Center
         };
-        iconFallback.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryBrush");
+        if (site.Url.Contains("afdian.com", StringComparison.OrdinalIgnoreCase))
+        {
+            // 爱发电品牌紫，和普通站点区分开
+            iconFallback.Foreground = new SolidColorBrush(Color.FromRgb(0x94, 0x6C, 0xE6));
+        }
+        else
+        {
+            iconFallback.SetResourceReference(TextBlock.ForegroundProperty, "PrimaryBrush");
+        }
         var iconImage = new Image
         {
             Width = 20,

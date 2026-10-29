@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace QuartzLauncher.Models;
 
@@ -61,6 +61,16 @@ public class Settings
     /// 注意：默认关闭 —— 强制离线会导致「加入别人的服务器」时报无效会话。
     /// </summary>
     public bool LanAllowNonPremium { get; set; } = false;
+
+    /// <summary>
+    /// 启动时自动应用的键位方案：key = 动作 id（不含 <c>key_</c> 前缀，如 <c>key.forward</c>），
+    /// value = 键值（现代版本 <c>key.keyboard.w</c>，1.12.2 及更早用数字键码）。
+    /// 真正写入发生在启动游戏前（<c>&lt;实例目录&gt;/options.txt</c>）。
+    /// </summary>
+    public Dictionary<string, string> Keybinds { get; set; } = new();
+
+    /// <summary>是否在启动游戏时应用上面的键位方案。</summary>
+    public bool KeybindsEnabled { get; set; } = true;
     public string LastFabricLoader { get; set; } = "";
     public string LastForgeLoader { get; set; } = "";
     public bool AutoInstallLoader { get; set; } = true;

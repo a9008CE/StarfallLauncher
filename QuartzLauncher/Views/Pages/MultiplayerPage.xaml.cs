@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -2186,6 +2186,7 @@ public partial class MultiplayerPage : Page
         info.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
         info.Inlines.Add(new System.Windows.Documents.Run(
             $"{room.KindText} · {room.KindDetail} · MC {room.Mc} · {room.PlayerText}"
+            + " · " + room.PremiumText
             + (room.Locked ? " · 🔒需密码" : "")));
         left.Children.Add(info);
         Grid.SetColumn(left, 0);
@@ -2233,7 +2234,7 @@ public partial class MultiplayerPage : Page
 
         // 第一行：房间版本 + 房主玩家 ID
         DetailMeta.Text = $"版本 {room.Mc}　玩家ID {room.OwnerText}\n"
-                          + $"{room.KindText} · {room.KindDetail} · {room.PlayerText}";
+                          + $"{room.KindText} · {room.KindDetail} · {room.PlayerText} · {room.PremiumText}";
 
         // 第二行：连接地址
         if (room.ConnectAddress is { Length: > 0 })
@@ -2379,6 +2380,26 @@ public partial class MultiplayerPage : Page
     /// <summary>加入房间的共用流程：中继握手 → 本地代理 → Mod 同步 → 一键启动并加入。</summary>
     private async Task StartJoinRoomAsync(LobbyRoom room, string password, Action<string> setStatus)
     {
+        // ② 房主那边是正版验证时，离线账号「一键加入」必定被踢回「无效会话」。
+        //    与其让玩家进游戏才看到报错，不如先讲清楚并给两条出路。
+        if (!room.AllowNonPremium && App.Settings.Data.AuthMode == QuartzLauncher.Models.AuthModes.Offline)
+        {
+            var go = AnimatedMessageBox.Show(
+                "这个房间要求正版验证，而你当前是离线账号 —— 直接加入会提示「无效会话」。\n\n" +
+                "两条出路：\n" +
+                "· 请房主在开房弹窗里勾上「允许非正版玩家进入」，然后重启一次游戏；\n" +
+                "· 或者你登录正版账号再加入。\n\n" +
+                "仍要尝试加入吗？",
+                "可能无法加入",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (go != MessageBoxResult.Yes)
+            {
+                setStatus("已取消：该房间要求正版验证");
+                return;
+            }
+        }
+
         var result = await _lobby.JoinAsync(room.Room, password);
         if (!result.Ok)
         {

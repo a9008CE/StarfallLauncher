@@ -1,4 +1,4 @@
-<Window x:Class="QuartzLauncher.MainWindow"
+﻿<Window x:Class="QuartzLauncher.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:services="clr-namespace:QuartzLauncher.Services"
@@ -17,9 +17,11 @@
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType">
 
-    <Border BorderThickness="0" Background="{DynamicResource WindowBackgroundBrush}">
+    <!-- 背景只在 Window 上画一层：内层 Border/Grid 再画同一支笔刷等于整窗多栅格化两遍，
+         深色下能明显感觉到掉帧（2026-10-29 用户反馈"卡卡的"）。Transparent 仍保留命中测试。 -->
+    <Border BorderThickness="0" Background="Transparent">
             <Grid x:Name="WindowRoot" RenderTransformOrigin="0.5,0.5"
-                  Background="{DynamicResource WindowBackgroundBrush}">
+                  Background="Transparent">
                 <Grid.RenderTransform>
                     <TransformGroup>
                         <ScaleTransform x:Name="WindowScale" ScaleX="1" ScaleY="1"/>

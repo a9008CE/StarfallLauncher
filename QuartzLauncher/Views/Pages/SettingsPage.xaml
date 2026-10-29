@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.SettingsPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.SettingsPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:behavior="clr-namespace:QuartzLauncher.Services"
@@ -25,6 +25,31 @@
                     <Button Grid.Column="1" Content="打开更多功能" Style="{DynamicResource BtnBase}"
                             Padding="14,7" VerticalAlignment="Center" Click="OpenMore_Click"/>
                 </Grid>
+            </Border>
+
+            <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,16" Cursor="Hand"
+                    MouseLeftButtonUp="OpenFeedback_Click">
+                <StackPanel>
+                    <TextBlock Text="问题反馈" Style="{DynamicResource SectionHeader}"/>
+                    <TextBlock Text="遇到 BUG、游戏报错崩溃，或者想提建议：点这里，自动带上环境信息和最近日志，一键提交给我们。"
+                               FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,16" Cursor="Hand"
+                    MouseLeftButtonUp="OpenKeybindDialog_Click">
+                <StackPanel>
+                    <DockPanel>
+                        <TextBlock Text="键位设置" Style="{DynamicResource SectionHeader}"/>
+                        <TextBlock x:Name="KeybindSummaryText" DockPanel.Dock="Right" FontSize="11"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextMutedBrush}"/>
+                    </DockPanel>
+                    <TextBlock Text="默认键位方案：可改 W/A/S/D 等原版按键，启动游戏时自动写入该实例的 options.txt（只保存原版键位，Mod 键位只读展示、不会被覆盖）。"
+                               FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                               TextWrapping="Wrap" Margin="0,6,0,0"/>
+                </StackPanel>
             </Border>
 
             <Border Style="{DynamicResource CardStyle}" Margin="0,0,0,16">

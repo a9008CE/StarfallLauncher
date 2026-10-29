@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -53,6 +53,7 @@ public partial class MainWindow : Window
     public static List<FrameworkElement> NavStackItems =>
         Current?.NavStack.Children.OfType<FrameworkElement>().ToList() ?? [];
     private ServerBrowserPage? _serverBrowserPage;
+    private FeedbackPage? _feedbackPage;
     private MorePage? _morePage;
     private HelpPage? _helpPage;
     private VersionSettingsPage? _versionSettingsPage;
@@ -112,6 +113,12 @@ public partial class MainWindow : Window
     private DispatcherTimer? _quoteTimer;
     private int _navigationGeneration;
     private int _themeTransitionGeneration;
+
+    /// <summary>
+    /// 这台机器上的 WPF 渲染层级（0/1 = 软件或弱显卡）。老笔记本/双显卡机器常见 Tier 1，
+    /// 整窗缩放、全窗遮罩渐变这类逐帧合成会很卡 —— 下面按它自动降级。
+    /// </summary>
+    private static bool LowRenderTier => (RenderCapability.Tier >> 16) < 2;
 
     private int _windowStateAnimationGeneration;
     private bool _isMinimizeAnimating;
@@ -932,6 +939,8 @@ public partial class MainWindow : Window
     /// <summary>首页「快捷入口」卡用得到（侧栏的「帮助」项已撤掉，这里保留成公开跳转）。</summary>
     public void NavigateToHelp() => NavigateTo(_helpPage ??= new HelpPage());
     public void NavigateToServerBrowser() => NavigateTo(_serverBrowserPage ??= new ServerBrowserPage());
+    /// <summary>设置页「问题反馈」卡片进这里（自动收集环境信息 + 日志）。</summary>
+    public void NavigateToFeedback() => NavigateTo(_feedbackPage ??= new FeedbackPage());
     public void NavigateToBrowser(string url, Page? backTarget = null) => NavigateTo(new BrowserPage(url, backTarget));
     public void NavigateToJavaDownload() => NavigateTo(new ModBrowserPage(initialMode: "java"));
     private MultiplayerPage? _multiplayerPage;
@@ -1061,12 +1070,17 @@ public partial class MainWindow : Window
 
         WindowRoot.BeginAnimation(OpacityProperty,
             new DoubleAnimation(WindowRoot.Opacity, 0.2, duration) { EasingFunction = ease });
-        WindowScale.BeginAnimation(ScaleTransform.ScaleXProperty,
-            new DoubleAnimation(WindowScale.ScaleX, 0.985, duration) { EasingFunction = ease });
-        WindowScale.BeginAnimation(ScaleTransform.ScaleYProperty,
-            new DoubleAnimation(WindowScale.ScaleY, 0.985, duration) { EasingFunction = ease });
-        WindowTranslate.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(WindowTranslate.Y, 8, duration) { EasingFunction = ease });
+        if (!LowRenderTier)
+        {
+            // 整窗缩放要每帧重新合成整棵树：先缓存成一张位图，缩放作用在位图上
+            WindowRoot.CacheMode = new BitmapCache();
+            WindowScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                new DoubleAnimation(WindowScale.ScaleX, 0.985, duration) { EasingFunction = ease });
+            WindowScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                new DoubleAnimation(WindowScale.ScaleY, 0.985, duration) { EasingFunction = ease });
+            WindowTranslate.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(WindowTranslate.Y, 8, duration) { EasingFunction = ease });
+        }
 
         await Task.Delay(duration + TimeSpan.FromMilliseconds(12));
         if (generation == _windowStateAnimationGeneration)
@@ -1112,16 +1126,21 @@ public partial class MainWindow : Window
             WindowScale.ScaleX = 1;
             WindowScale.ScaleY = 1;
             WindowTranslate.Y = 0;
+            WindowRoot.CacheMode = null;
             WindowRoot.IsHitTestVisible = true;
         };
 
         WindowRoot.BeginAnimation(OpacityProperty, opacity);
-        WindowScale.BeginAnimation(ScaleTransform.ScaleXProperty,
-            new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
-        WindowScale.BeginAnimation(ScaleTransform.ScaleYProperty,
-            new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
-        WindowTranslate.BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(8, 0, duration) { EasingFunction = ease });
+        if (!LowRenderTier)
+        {
+            WindowRoot.CacheMode = new BitmapCache();
+            WindowScale.BeginAnimation(ScaleTransform.ScaleXProperty,
+                new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
+            WindowScale.BeginAnimation(ScaleTransform.ScaleYProperty,
+                new DoubleAnimation(0.985, 1, duration) { EasingFunction = ease });
+            WindowTranslate.BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(8, 0, duration) { EasingFunction = ease });
+        }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -1193,6 +1212,24 @@ public partial class MainWindow : Window
                 onCompleted?.Invoke();
             };
             ThemeTransitionOverlay.BeginAnimation(OpacityProperty, fade);
+            return;
+        }
+
+        // 弱机 或 用户没开「高级动画」时：把 720ms 的全窗遮罩渐变扫描换成 380ms 的整体淡出。
+        // 遮罩动画每帧都要重算一遍 1050x680 的 alpha 合成，老显卡上必卡。
+        if (LowRenderTier || !App.Settings.Data.AdvancedAnimationEnabled)
+        {
+            var quickFade = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(380))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+            };
+            quickFade.Completed += (_, _) =>
+            {
+                if (generation != _themeTransitionGeneration) return;
+                ClearThemeTransitionOverlay();
+                onCompleted?.Invoke();
+            };
+            ThemeTransitionOverlay.BeginAnimation(OpacityProperty, quickFade);
             return;
         }
 
@@ -1271,7 +1308,7 @@ public partial class MainWindow : Window
         else if (page is MultiplayerPage or ServerBrowserPage) idx = 2;
         else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 3;
         else if (page is SettingsPage or MorePage or ThemeDetailPage or AnimationSettingsPage
-                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage) idx = 4;
+                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage or FeedbackPage) idx = 4;
         else return;
 
         for (var i = 0; i < NavStack.Children.Count; i++)
@@ -1377,10 +1414,16 @@ public partial class MainWindow : Window
             }
 
             var quick = animationStyle == "quick";
-            var exitDuration = quick ? 80 : 450;
-            var enterDuration = quick ? 130 : 450;
-            var exitDistance = quick ? 14 : 350;
-            var enterDistance = quick ? 10 : 350;
+            // 弱机（Tier<2）把位移从 350px 收到 90px、时长从 450ms 收到 300ms：
+            // 观感几乎一样，但逐帧合成的面积和帧数都少一大截。
+            var longExit = LowRenderTier ? 260 : 340;
+            var longEnter = LowRenderTier ? 260 : 340;
+            var longExitDistance = LowRenderTier ? 80 : 150;
+            var longEnterDistance = LowRenderTier ? 60 : 120;
+            var exitDuration = quick ? 80 : longExit;
+            var enterDuration = quick ? 130 : longEnter;
+            var exitDistance = quick ? 14 : longExitDistance;
+            var enterDistance = quick ? 10 : longEnterDistance;
             if (targetUsesStandaloneSidebar && sidebarWasVisible)
             {
                 var sidebarExit = new TranslateTransform();
@@ -1433,6 +1476,12 @@ public partial class MainWindow : Window
             MainFrame.CacheMode = null;
             MainFrame.Navigate(page);
 
+            // 新页面第一次布局/栅格化（首页 6 张玻璃卡 + 图标）如果正好压进入场动画的头几帧，
+            // 就会看到"动画刚起步就卡一下"。这里让渲染管线先把它画出来，
+            // 再开始动画；动画期间再套一层 BitmapCache，逐帧只移动/淡出一张位图。
+            await Dispatcher.Yield(DispatcherPriority.Render);
+            MainFrame.CacheMode = new BitmapCache();
+
             var showSidebar = !targetUsesStandaloneSidebar;
             if (showSidebar)
             {
@@ -1479,6 +1528,7 @@ public partial class MainWindow : Window
                         EasingFunction = new SineEase { EasingMode = EasingMode.EaseOut }
                     });
                 await Task.Delay(enterDuration);
+                MainFrame.CacheMode = null;
                 if (generation != _navigationGeneration) return;
                 MainFrame.BeginAnimation(OpacityProperty, null);
                 MainFrame.Opacity = 1;
@@ -1498,6 +1548,7 @@ public partial class MainWindow : Window
                 new DoubleAnimation(enterDistance, 0, TimeSpan.FromMilliseconds(enterDuration)) { EasingFunction = enterEase });
 
             await Task.Delay(enterDuration);
+            MainFrame.CacheMode = null;
             if (generation != _navigationGeneration) return;
             MainFrame.BeginAnimation(OpacityProperty, null);
             SidebarBorder.BeginAnimation(OpacityProperty, null);

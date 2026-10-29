@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -19,6 +19,9 @@ public partial class HomePage : Page
     private Process? _gameProcess;
     private DateTime _gameStartedAt;
     private bool _userTerminated;
+
+    /// <summary>本次游戏进程是用哪种会话启动的（true=离线会话 → 局域网不做正版验证）。</summary>
+    private bool _launchedOfflineSession;
     private bool _launchInProgress;
     private LanWorldWatcher? _lanWatcher;
     private RelayClient? _relayClient;
@@ -416,12 +419,12 @@ public partial class HomePage : Page
         }
 
         var gameDir = InstancePathService.GetGameDirectory(App.Paths, App.Settings.Data, instance);
-        var modsDir = Path.Combine(gameDir, "mods");
-        if (Directory.Exists(modsDir))
-        {
-            var modCount = Directory.GetFiles(modsDir, "*.jar").Length;
-            if (modCount > 0) parts.Add($"{modCount} Mods");
-        }
+        // 2026-10-27：口径统一到 ContentService.CountMods（和 Mod 管理页一致）。
+        // 以前只数 *.jar，被禁用的 Mod（x.jar.disabled / x.jar.old）在列表里看得见、这里却不显示，
+        // 玩家会以为「Mod 装好了但游戏没加载」，其实是全部被禁用了。
+        var (enabledMods, disabledMods) = ContentService.CountMods(gameDir);
+        if (enabledMods > 0 || disabledMods > 0)
+            parts.Add(disabledMods > 0 ? $"{enabledMods} Mods（{disabledMods} 个已禁用）" : $"{enabledMods} Mods");
 
         InstanceMeta.Text = string.Join("  ·  ", parts);
         InstanceInfo.Text = $"游戏目录：{gameDir}";
@@ -591,6 +594,75 @@ public partial class HomePage : Page
             var baseVersion = string.IsNullOrEmpty(instance.McVersion) ? instance.VersionId : instance.McVersion;
             var minecraft = new MinecraftService(App.Paths, App.Settings);
 
+            // ── 启动前 Mod 自检（2026-10-27，口径照 PCL2）──
+            //
+            // 玩家反馈「Mod 列表里有、进游戏 0 个」。实测两类原因：
+            //   ① Mod 被禁用（改名 x.jar.disabled / .old）—— 游戏只认 .jar，一个都不加载；
+            //   ② Mod 在**另一个实例目录布局**里（我们有 versions/<版本id> 与 instances/<实例id>
+            //      两套，PCL2 只有前者），游戏读的那个目录是空的（换过版本隔离 / 从 PCL2 迁移）。
+            // 所以把所有候选目录都数一遍：主目录没有、别处有时，直接提示并迁移。
+            var modCandidates = InstancePathService.GetModDirCandidates(App.Paths, App.Settings.Data, instance);
+            var launchRoot = modCandidates[0].Path;   // 第一个就是游戏真正会用的目录
+            var (enabledModCount, disabledModCount) = ContentService.CountMods(launchRoot);
+            AppendLog($"[INFO] 游戏目录：{launchRoot}");
+            foreach (var candidate in modCandidates)
+                AppendLog($"[INFO] Mod 扫描 {candidate.Label}：{candidate.Path} → 已启用 {candidate.Enabled} 个，已禁用 {candidate.Disabled} 个");
+            AppendLog($"[INFO] 本实例将加载的 Mod：已启用 {enabledModCount} 个，已禁用 {disabledModCount} 个");
+
+            var loaderIsVanilla = string.IsNullOrWhiteSpace(instance.Loader)
+                                  || instance.Loader.Equals("vanilla", StringComparison.OrdinalIgnoreCase);
+            if (enabledModCount > 0 && loaderIsVanilla)
+                AppendLog("[WARN] 该实例没有加载器（原版），Mod 不会被加载 —— 请改用 Fabric/Forge/NeoForge 实例。");
+
+            // ② 主目录空、别处有 Mod → 问要不要迁过来
+            var otherWithMods = modCandidates.Skip(1).FirstOrDefault(candidate => candidate.Enabled > 0);
+            if (enabledModCount == 0 && otherWithMods != null)
+            {
+                var choice = AnimatedMessageBox.Show(
+                    "当前实例要读取的 Mod 目录是：\n" + launchRoot + "\\mods（已启用 0 个）\n\n" +
+                    "但在另一个位置发现了 " + otherWithMods.Enabled + " 个已启用的 Mod：\n" +
+                    otherWithMods.Path + "\\mods\n\n" +
+                    "这通常是换过「版本隔离」或从 PCL2 迁移过来导致的。\n要现在把它们迁移到当前实例目录吗？",
+                    "Mod 在另一个目录里",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning,
+                    ("迁移并启动", "直接启动", "取消启动"));
+                if (choice == MessageBoxResult.Cancel) { LeaveLaunchOnUserCancel(SetStep); return; }
+                if (choice == MessageBoxResult.Yes)
+                {
+                    var moved = ContentService.MigrateMods(otherWithMods.Path, launchRoot);
+                    AppendLog($"[INFO] 已从 {otherWithMods.Path} 迁移 {moved} 个 Mod 到 {launchRoot}\\mods");
+                    var after = ContentService.CountMods(launchRoot);
+                    enabledModCount = after.Enabled;
+                    disabledModCount = after.Disabled;
+                    AppendLog($"[INFO] 迁移后：已启用 {enabledModCount} 个，已禁用 {disabledModCount} 个");
+                }
+            }
+
+            // ① 一个启用都没有、全是禁用项 → 问要不要全部启用
+            if (enabledModCount == 0 && disabledModCount > 0)
+            {
+                var choice = AnimatedMessageBox.Show(
+                    $"检测到 {disabledModCount} 个 Mod 处于禁用状态，游戏启动后不会加载它们（游戏内会显示 0 个 Mod）。\n\n" +
+                    "要现在全部启用吗？",
+                    "Mod 全部处于禁用状态",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Warning,
+                    ("全部启用并启动", "直接启动", "取消启动"));
+                if (choice == MessageBoxResult.Cancel) { LeaveLaunchOnUserCancel(SetStep); return; }
+                if (choice == MessageBoxResult.Yes)
+                {
+                    var enabledNow = ContentService.EnableAllDisabled(launchRoot);
+                    AppendLog($"[INFO] 已启用 {enabledNow} 个 Mod");
+                    var recount = ContentService.CountMods(launchRoot);
+                    AppendLog($"[INFO] 现在的 Mod：已启用 {recount.Enabled} 个，已禁用 {recount.Disabled} 个");
+                }
+                else
+                {
+                    AppendLog("[WARN] 按用户选择直接启动：本次游戏内不会有任何 Mod。");
+                }
+            }
+
             SetStep("选择 Java 版本", 0.1);
             var requiredJavaMajor = minecraft.GetRequiredJavaMajor(instance);
             var javaInfo = await Task.Run(() => JavaService.SelectForMajor(
@@ -648,7 +720,18 @@ public partial class HomePage : Page
             if (App.Settings.Data.AuthMode == AuthModes.Microsoft)
             {
                 SetStep("验证 Microsoft 登录", 0.2);
-                await MicrosoftAuthService.EnsureSessionAsync();
+                try
+                {
+                    await MicrosoftAuthService.EnsureSessionAsync();
+                }
+                catch (Exception sessionEx)
+                {
+                    // ③ 会话体检：带着失效 token 启动，最常见的后果就是进游戏后
+                    //    连任何服务器都弹「无效会话」。这里提前拦下并给出可操作指引。
+                    throw new IOException(
+                        "正版登录状态失效，无法启动游戏：\n" + sessionEx.Message +
+                        "\n\n请到「设置 → 账号」重新登录正版账号后再试。");
+                }
             }
 
             if (App.Settings.Data.MemoryOptimize)
@@ -719,7 +802,8 @@ public partial class HomePage : Page
 
             if (quickPlay != null)
                 AppendLog($"[INFO] 启动后自动加入服务器 {quickPlay}");
-            var (java, args, cwd) = minecraft.BuildCommand(instance, javaInfo.Path, quickPlay);
+            var (java, args, cwd, launchedOfflineSession) = minecraft.BuildCommand(instance, javaInfo.Path, quickPlay);
+            _launchedOfflineSession = launchedOfflineSession;
             var processStartInfo = new ProcessStartInfo(java)
             {
                 WorkingDirectory = cwd,
@@ -782,6 +866,44 @@ public partial class HomePage : Page
 
     // ===== 局域网世界监听（自动发现「对局域网开放」）=====
 
+    /// <summary>
+    /// 用新的会话类型重启游戏：「允许非正版玩家进入」这个开关只有重启后才会生效，
+    /// 否则房主的世界仍然是正版验证，别人（非正版）连进来就会看到「无效会话」。
+    /// </summary>
+    private async Task RestartGameForLanAsync(Instance instance)
+    {
+        StopLanWatcher();
+        CloseRelayClient();
+
+        var proc = _gameProcess;
+        _userTerminated = true;
+        try
+        {
+            if (proc is { HasExited: false })
+            {
+                AppendLog("[INFO] 正在结束游戏，以「允许非正版玩家进入」的新会话重启…");
+                try { proc.Kill(true); } catch { try { proc.Kill(); } catch { } }
+                for (var i = 0; i < 120 && !proc.HasExited; i++) await Task.Delay(100);
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendLog("[WARN] 结束旧游戏进程时出错：" + ex.Message);
+        }
+
+        _gameProcess = null;
+        _launchInProgress = false;
+        _userTerminated = false;
+        ForceStopBtn.Visibility = Visibility.Collapsed;
+        StopBtn.Visibility = Visibility.Collapsed;
+        LaunchBtn.Visibility = Visibility.Visible;
+        LaunchBtn.IsEnabled = true;
+        SetLaunchState(LaunchUiState.Idle);
+        AppendLog("[INFO] 已按新会话类型重启游戏：请在游戏里重新「对局域网开放」，房间会自动重新发布。");
+        await Task.Delay(300);
+        Launch_Click(this, new RoutedEventArgs());
+    }
+
     private void StartLanWatcher(Instance instance)
     {
         StopLanWatcher();
@@ -834,6 +956,30 @@ public partial class HomePage : Page
             App.Settings.Data.LanAllowNonPremium);
         App.Settings.Data.LanAllowNonPremium = result.AllowNonPremium;
         App.Settings.Save();
+
+        // ① 这个开关只在「启动游戏时」生效。如果和当前这一局的会话类型不一致，
+        //    对方加入时仍然会被正版验证踢掉（就是玩家看到的「无效会话」）。
+        //    所以直接把「要不要现在重启游戏」摆到房主面前，不指望他去猜。
+        var willLaunchOffline = result.AllowNonPremium
+                                && App.Settings.Data.AuthMode != AuthModes.Offline;
+        if (willLaunchOffline != _launchedOfflineSession)
+        {
+            var restart = AnimatedMessageBox.Show(
+                "「允许非正版玩家进入」需要重启游戏才会生效。\n\n" +
+                $"当前这一局是以{(_launchedOfflineSession ? "离线会话（非正版可进）" : "正版会话（只有正版能进）")}启动的；\n" +
+                $"重启后会变成{(willLaunchOffline ? "离线会话 → 非正版也能加入" : "正版会话 → 仅正版账号可加入")}。\n\n" +
+                "现在重启游戏吗？（重启后要在游戏里重新「对局域网开放」，房间会自动重新发布）",
+                "需要重启游戏才能生效",
+                MessageBoxButton.YesNoCancel,
+                MessageBoxImage.Warning,
+                ("现在重启", "稍后再说", "取消这次开房"));
+            if (restart == MessageBoxResult.Cancel) return;
+            if (restart == MessageBoxResult.Yes)
+            {
+                _ = RestartGameForLanAsync(instance);
+                return;
+            }
+        }
         var choiceText = result.Choice switch
         {
             LanShareChoice.Public => "公开",
@@ -872,9 +1018,12 @@ public partial class HomePage : Page
                 : App.Settings.Data.AuthPlayerName;
             // 带上账号编码：已登录时，好友列表会显示「好友的房间」并可一键加入
             var ownerCode = AccountService.Current is { IsLoggedIn: true } account ? account.Code : "";
+            // 房间上带「这一局局域网世界到底要不要正版验证」——由本次启动的会话类型决定，
+            // 不是设置面板里的愿望值（设置要重启才生效）。
             var ok = await client.CreateRoomAsync(
                 info.Motd, mc, snapshot.Modded ? "modded" : "vanilla",
-                instance.Loader ?? "", mods.Count, password, 10, mods, owner, ownerCode);
+                instance.Loader ?? "", mods.Count, password, 10, mods, owner, ownerCode,
+                allowNonPremium: _launchedOfflineSession);
 
             if (ok)
             {
@@ -1637,6 +1786,17 @@ public partial class HomePage : Page
             RefreshProfile();
         }
         catch (Exception ex) { AnimatedMessageBox.Show(ex.Message, "移除账户失败"); }
+    }
+
+    /// <summary>启动前自检里用户点了「取消启动」——把首页 UI 复位（不改任何数据）。</summary>
+    private void LeaveLaunchOnUserCancel(Action<string, double> setStep)
+    {
+        ForceStopBtn.Visibility = Visibility.Collapsed;
+        LaunchBtn.Visibility = Visibility.Visible;
+        LaunchBtn.IsEnabled = true;
+        setStep("", -1);
+        _launchInProgress = false;
+        SetLaunchState(LaunchUiState.Idle);
     }
 
     private void QuickInstall_Click(object sender, RoutedEventArgs e)

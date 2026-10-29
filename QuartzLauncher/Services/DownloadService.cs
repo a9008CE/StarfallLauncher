@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -24,6 +24,38 @@ public static class DownloadService
     private const string BmclapiMirror = "https://bmclapi2.bangbang93.com";
     private const string CurseForgeMirror = "https://mod.mcimirror.top";
     private const string AdoptiumMirror = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium";
+
+    /// <summary>
+    /// **2015 年以前的老库**：bmclapi 镜像上大量 403 / 挂死，官方 libraries.minecraft.net 反而稳定。
+    /// 2026-10-27 实测（1.12.2 的 LWJGL 2.9.4）：
+    ///   bmclapi2  → lwjgl-2.9.4…jar 挂 45 秒超时；lwjgl-platform…natives-windows.jar 直接 403
+    ///   official  → 两个都 200，且字节数与版本 JSON 的声明完全一致
+    /// 这些路径改成**官方优先、镜像兜底**，避免每次修复都要先白等一次 30 秒超时。
+    /// </summary>
+    private static readonly string[] OfficialFirstLibraryMarkers =
+    {
+        "/org/lwjgl/lwjgl/lwjgl",        // LWJGL 2 全家（lwjgl / lwjgl_util / lwjgl-platform / lwjgl-applet）
+                                         //   LWJGL 3 是 /org/lwjgl/lwjgl/3.x.x/，后面接版本号，不会被这条命中
+        "/net/java/jinput/",             // jinput 2.0.5 + jinput-platform natives
+        "/com/paulscode/",               // librarylwjglopenal / libraryjavasound
+        "/ca/weblite/java-objc-bridge/", // macOS 的 objc bridge
+        "/com/mojang/text2speech/",      // 1.6~1.9 的 TTS
+        "/com/mojang/realms/"            // 老 Realms 客户端库
+    };
+
+    /// <summary>这个库 URL 是否属于「老库」（走官方优先）。</summary>
+    private static bool IsLegacyLibraryUrl(string url)
+    {
+        if (!url.StartsWith("https://libraries.minecraft.net", StringComparison.OrdinalIgnoreCase))
+            return false;
+        var path = url["https://libraries.minecraft.net".Length..];
+        foreach (var marker in OfficialFirstLibraryMarkers)
+        {
+            if (path.Contains(marker, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
+
     private const long ParallelDownloadThreshold = 2 * 1024 * 1024;
     private const int MaxFileSegments = 8;
     private static readonly TimeSpan DownloadInactivityTimeout = TimeSpan.FromSeconds(25);
@@ -100,6 +132,12 @@ public static class DownloadService
             return new List<string> { url };
         if (_sourceMode == "bmclapi")
             return mirrorUrls;
+
+        // 老库（LWJGL 2 等）：官方优先、镜像兜底。镜像对这批 2015 年的文件是 403/挂死，
+        // 排在前面只会白等一次 30 秒超时（实测数据见 OfficialFirstLibraryMarkers 注释）。
+        if (IsLegacyLibraryUrl(url))
+            return new[] { url }.Concat(mirrorUrls).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
         return mirrorUrls.Concat(new[] { url }).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
