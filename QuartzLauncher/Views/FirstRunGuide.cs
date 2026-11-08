@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -456,7 +456,7 @@ public static class FirstRunGuide
 
     private static FrameworkElement? NavAt(int index)
     {
-        // 侧栏入口是 NavStack 里按顺序排的匿名 RadioButton（五项：首页/版本库/联机/资源/设置）
+        // 侧栏入口是 NavStack 里按顺序排的匿名 RadioButton（六项：首页/版本库/联机/资源/音乐/设置）
         // ⚠️ 加/减侧栏项时，下面 Steps 里的 NavAt(n) 必须全部重新对号，否则引导会指到别的项上。
         var items = MainWindow.NavStackItems;
         return index >= 0 && index < items.Count ? items[index] : null;
@@ -505,6 +505,6 @@ public static class FirstRunGuide
         new("主题和设置都在「设置」",
             "换主题、调内存、改下载源、开关动画效果都在「设置」里。\n\n遇到问题先看「帮助」页的日志分析，它会直接告诉你原因和怎么解决。",
             "就这些，点「开始使用」自己去玩吧。",
-            () => NavAt(4))
+            () => NavAt(5))
     ];
 }

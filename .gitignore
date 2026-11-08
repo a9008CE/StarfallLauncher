@@ -1,4 +1,4 @@
-# ===== 构建输出 =====
+﻿# ===== 构建输出 =====
 [Bb]in/
 [Oo]bj/
 dist/
@@ -26,3 +26,6 @@ HANDOFF*.md
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# 邦友的酒彩蛋音频（版权原因不进开源仓库）
+QuartzLauncher/Assets/bangyouwine.mp3

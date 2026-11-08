@@ -1,4 +1,4 @@
-<Page x:Class="QuartzLauncher.Views.Pages.SkinPreviewPage"
+﻿<Page x:Class="QuartzLauncher.Views.Pages.SkinPreviewPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       Background="Transparent">
@@ -79,7 +79,8 @@
                     <Button Content="跑步" Tag="跑步" Style="{DynamicResource BtnBase}" Click="Preset_Click" Margin="0,0,0,8"/>
                     <Button Content="游泳" Tag="游泳" Style="{DynamicResource BtnBase}" Click="Preset_Click" Margin="0,0,0,8"/>
                     <Button Content="坐下" Tag="坐下" Style="{DynamicResource BtnBase}" Click="Preset_Click" Margin="0,0,0,8"/>
-                    <Button Content="默认" Tag="默认" Style="{DynamicResource BtnBase}" Click="Preset_Click"/>
+                    <Button Content="默认" Tag="默认" Style="{DynamicResource BtnBase}" Click="Preset_Click" Margin="0,0,0,12"/>
+                      <Button x:Name="WineBtn" Content="邦友的酒" Style="{DynamicResource BtnBase}" Click="BangyouWine_Click"/>
                 </StackPanel>
             </Border>
 

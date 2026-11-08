@@ -235,6 +235,16 @@
                                 </StackPanel>
                             </RadioButton>
                             <RadioButton Style="{DynamicResource NavBtn}"
+                                         AutomationProperties.Name="音乐"
+                                         Click="NavMusic_Click">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">
+                                    <TextBlock Text="&#xE8D6;" FontFamily="Segoe MDL2 Assets" FontSize="15"
+                                               Width="22" TextAlignment="Center" VerticalAlignment="Center"
+                                               Margin="0,0,10,0"/>
+                                    <TextBlock Text="音乐" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton Style="{DynamicResource NavBtn}"
                                          AutomationProperties.Name="设置"
                                          Click="NavSettings_Click">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="{DynamicResource NavTextAlignment}">

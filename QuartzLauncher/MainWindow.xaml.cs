@@ -54,6 +54,7 @@ public partial class MainWindow : Window
         Current?.NavStack.Children.OfType<FrameworkElement>().ToList() ?? [];
     private ServerBrowserPage? _serverBrowserPage;
     private FeedbackPage? _feedbackPage;
+    private MusicPage? _musicPage;
     private MorePage? _morePage;
     private HelpPage? _helpPage;
     private VersionSettingsPage? _versionSettingsPage;
@@ -941,6 +942,8 @@ public partial class MainWindow : Window
     public void NavigateToServerBrowser() => NavigateTo(_serverBrowserPage ??= new ServerBrowserPage());
     /// <summary>设置页「问题反馈」卡片进这里（自动收集环境信息 + 日志）。</summary>
     public void NavigateToFeedback() => NavigateTo(_feedbackPage ??= new FeedbackPage());
+    private void NavMusic_Click(object sender, RoutedEventArgs e) => NavigateToMusic();
+    public void NavigateToMusic() => NavigateTo(_musicPage ??= new MusicPage());
     public void NavigateToBrowser(string url, Page? backTarget = null) => NavigateTo(new BrowserPage(url, backTarget));
     public void NavigateToJavaDownload() => NavigateTo(new ModBrowserPage(initialMode: "java"));
     private MultiplayerPage? _multiplayerPage;
@@ -1293,7 +1296,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void SelectNavButton(Page page)
     {
-        // 侧栏顺序（5 项）：0 首页 / 1 版本库 / 2 联机 / 3 资源 / 4 设置
+        // 侧栏顺序（6 项）：0 首页 / 1 版本库 / 2 联机 / 3 资源 / 4 音乐 / 5 设置
         // ⚠️ 加/减侧栏项时这里必须同步，否则高亮会指到别的项上。
         // 也别忘同步 FirstRunGuide.cs —— 它按序号取侧栏项。
         // ⚠️ 这里必须写成 `page is HomePage || page is HelpPage`，不能写成
@@ -1308,7 +1311,7 @@ public partial class MainWindow : Window
         else if (page is MultiplayerPage or ServerBrowserPage) idx = 2;
         else if (page is ModBrowserPage or ModDownloadSettingsPage) idx = 3;
         else if (page is SettingsPage or MorePage or ThemeDetailPage or AnimationSettingsPage
-                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage or FeedbackPage) idx = 4;
+                  or SkinPreviewPage or SkinLibraryPage or WebsiteSitesPage or FeedbackPage) idx = 5;
         else return;
 
         for (var i = 0; i < NavStack.Children.Count; i++)

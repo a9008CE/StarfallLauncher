@@ -1,3 +1,5 @@
+﻿using System.Diagnostics;
+using System.Net.Http;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -30,6 +32,21 @@ public partial class SkinPreviewPage : Page
     private readonly AxisAngleRotation3D _leftLegYRotation = new(new Vector3D(0, 1, 0), 0);
     private readonly AxisAngleRotation3D _rightLegYRotation = new(new Vector3D(0, 1, 0), 0);
     private readonly DispatcherTimer _walkTimer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+
+    // 「邦友的酒」彩蛋：整体压扁 + 坐下时下沉（2026-11-08）
+    private readonly ScaleTransform3D _squash = new(1, 1, 1);
+    private readonly TranslateTransform3D _sitOffset = new(0, 0, 0);
+    private bool _wineSitting;
+    private Stopwatch? _wineClock;      // 用渲染帧当时间基准，避免 Task.Delay 与渲染节拍错位（残影）
+    private bool _winePlaying;
+    private double _wineYaw0;
+    private const double WineTotalSeconds = 300.0;   // 保险上限；实际时长以音频为准
+    private const double SitDrop = -1.2;             // 坐下时整体下沉（-5 → -2.5 → -1.2，越往上越贴地少）
+    private readonly MediaPlayer _winePlayer = new();
+    private double _wineAudioSeconds;
+    private bool _winePlayerReady;
+    private bool _wineWantPlay;
+    private const double WineBpm = 120.0;   // 4/4 拍：0.5s 一拍，2s 一小节
     private bool _dragging;
     private Point _lastMouse;
     private double _walkTime;
@@ -46,12 +63,24 @@ public partial class SkinPreviewPage : Page
     {
         InitializeComponent();
         var playerTransform = new Transform3DGroup();
+        playerTransform.Children.Add(_squash);
+        playerTransform.Children.Add(_sitOffset);
         playerTransform.Children.Add(new RotateTransform3D(_bodyRotation, new Point3D(0, 14, 0)));
         playerTransform.Children.Add(new RotateTransform3D(_viewPitchRotation, new Point3D(0, 14, 0)));
         playerTransform.Children.Add(new RotateTransform3D(_rotation, new Point3D(0, 14, 0)));
         _playerModel.Transform = playerTransform;
         SceneRoot.Children.Add(_playerModel);
         _walkTimer.Tick += WalkTimer_Tick;
+        _winePlayer.MediaOpened += (_, _) =>
+        {
+            if (_winePlayer.NaturalDuration.HasTimeSpan)
+                _wineAudioSeconds = _winePlayer.NaturalDuration.TimeSpan.TotalSeconds;
+            if (_wineWantPlay)
+            {
+                try { _winePlayer.Position = TimeSpan.Zero; _winePlayer.Play(); } catch { }
+            }
+        };
+        _winePlayer.MediaEnded += (_, _) => OnWineAudioEnded();
         Loaded += (_, _) =>
         {
             LoadCurrentSkin();
@@ -73,6 +102,9 @@ public partial class SkinPreviewPage : Page
 
     private void ViewRendering(object? sender, EventArgs e)
     {
+        if (_winePlaying && _wineClock != null)
+            TickWine(_wineClock.Elapsed.TotalSeconds);
+
         _rotation.Angle += (_targetYaw - _rotation.Angle) * 0.18;
         _viewPitchRotation.Angle += (_targetPitch - _viewPitchRotation.Angle) * 0.18;
         if (!_poseActive)
@@ -264,12 +296,18 @@ public partial class SkinPreviewPage : Page
 
     private void Preset_Click(object sender, RoutedEventArgs e)
     {
+        _winePlaying = false;
+        _wineClock = null;
+        if (_wineSitting) WineBtn.Content = "邦友的酒";
+        _wineSitting = false;
+        SetSquash(1, 1);
+        _sitOffset.OffsetY = 0;
         if (sender is not Button { Tag: string name }) return;
         if (name == "默认")
         {
             _walkTimer.Stop();
-            ResetPose();
             _poseActive = false;
+            _ = BlendPoseAsync(PoseState.Zero, 0.30);
             return;
         }
 
@@ -290,27 +328,397 @@ public partial class SkinPreviewPage : Page
         AnimatedMessageBox.Show($"{name} 功能待配置。", "皮肤预设", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void ToggleMotion(MotionMode mode)
+    /// <summary>
+    /// 「邦友的酒」：先坐下，然后按 4/4 拍一边转圈一边 Q 弹，持续 5 分钟。
+    /// 动画由 CompositionTarget.Rendering 驱动（每帧一次），不再用 Task.Delay，
+    /// 避免变换被改两次导致旋转时出现残影/抽搐。
+    /// </summary>
+    private void BangyouWine_Click(object sender, RoutedEventArgs e)
+    {
+        // 正在跑 → 停下并起身
+        if (_winePlaying)
+        {
+            StopWineAndStandUp();
+            return;
+        }
+
+        // 已经坐下了（放完 5 分钟）→ 点一下起身
+        if (_wineSitting)
+        {
+            WineStandUp();
+            return;
+        }
+
+        // 音频已在安装包里，直接释放到缓存后播放
+        var withAudio = EnsureWineAudioFile();
+
+        // ② 开始动作（有音频就同时起）
+        StartWine(withAudio);
+    }
+
+    private void StartWine(bool withAudio)
+    {
+        _walkTimer.Stop();
+        ResetPose();
+        _poseActive = true;
+        _motionMode = MotionMode.Sit;
+
+        // 关掉容器上的位图缓存：缓存会把每帧的模型"定格"，旋转时就是残影的来源之一
+        if (SkinViewport.Parent is FrameworkElement host)
+            host.CacheMode = null;
+
+        _wineYaw0 = _rotation.Angle;
+        _wineClock = Stopwatch.StartNew();
+        _winePlaying = true;
+        _wineAudioSeconds = 0;
+
+        if (withAudio) PlayWineAudio();
+
+        WineBtn.Content = "旋转中 · " + FormatLeft(WineLength());
+    }
+
+    /// <summary>每帧推进（由 ViewRendering 调用）。</summary>
+    private void TickWine(double t)
+    {
+        if (!_winePlaying || _wineClock == null) return;
+
+        if (t < 0.45)
+        {
+            // ① 坐下
+            var e = EaseOutBack(t / 0.45);
+            _sitOffset.OffsetY = SitDrop * e;
+            _leftLegRotation.Angle = -81 * e;
+            _rightLegRotation.Angle = -81 * e;
+            _leftLegYRotation.Angle = -18 * e;
+            _rightLegYRotation.Angle = 18 * e;
+            _leftArmRotation.Angle = -36 * e;
+            _rightArmRotation.Angle = -36 * e;
+            SetSquash(1 + 0.06 * Math.Sin(t / 0.45 * Math.PI), 1);
+            return;
+        }
+
+        if (t >= WineLength())
+        {
+            _winePlaying = false;
+            SetSquash(1, 1);
+            _sitOffset.OffsetY = SitDrop;
+            _leftArmRotation.Angle = -36;
+            _rightArmRotation.Angle = -36;
+            _headRotation.Angle = 0;
+            _wineSitting = true;
+            WineBtn.Content = "邦友的酒 · 起身";
+            return;
+        }
+
+        var tt = t - 0.45;
+
+        // ② 匀速转圈（约 2.4 秒一圈）+ 拍点上给一点角速度脉冲
+        var beat = 60.0 / WineBpm;          // 0.5s
+        var bar = beat * 4;                 // 2.0s
+        var phase = tt % bar;
+        var inBeat = phase % beat;                     // 0..0.5s
+        // 匀速旋转，不加拍点脉冲（否则每拍转速不一样，看起来忽快忽慢）
+        _rotation.Angle = _wineYaw0 + tt * 150.0;
+
+        // ③ 4/4 拍 Q 弹：每一拍完全一样（同幅度、同曲线、同时长、无呼吸叠加）
+        const double amp = 0.42;
+        var shape = BeatShape(inBeat / beat);          // 0→1→略负（回弹过冲）
+        var s = 1 - amp * shape;
+        SetSquash(s, 1 / Math.Sqrt(Math.Max(0.5, s)));
+
+        // 身体轻颠跟同一条曲线，每拍一致
+        _sitOffset.OffsetY = SitDrop - 0.35 * shape;
+        var swing = shape * 8;
+        _leftArmRotation.Angle = -36 + swing;
+        _rightArmRotation.Angle = -36 - swing;
+        _headRotation.Angle = 3.5 * shape;
+
+        WineBtn.Content = "旋转中 · " + FormatLeft(WineLength() - t);
+    }
+
+    private void StopWineAndStandUp()
+    {
+        StopWineAudio();
+        _winePlaying = false;
+        _wineClock = null;
+        SetSquash(1, 1);
+        WineBtn.Content = "邦友的酒";
+        WineStandUp();
+    }
+
+    /// <summary>点一下就把彩蛋完全复位（起身用）。</summary>
+    private async void WineStandUp()
+    {
+        try
+        {
+            await AnimateAsync(0.30, p =>
+            {
+                var e = EaseOutBack(p);
+                _sitOffset.OffsetY = SitDrop * (1 - e);
+                _leftLegRotation.Angle = -81 * (1 - e);
+                _rightLegRotation.Angle = -81 * (1 - e);
+                _leftLegYRotation.Angle = -18 * (1 - e);
+                _rightLegYRotation.Angle = 18 * (1 - e);
+                _leftArmRotation.Angle = -36 * (1 - e);
+                _rightArmRotation.Angle = -36 * (1 - e);
+                _headRotation.Angle = 0;
+            }, CancellationToken.None);
+            _wineSitting = false;
+            _winePlaying = false;
+            _wineClock = null;
+            WineBtn.Content = "邦友的酒";
+        }
+        catch { }
+    }
+
+    /// <summary>把内嵌的 mp3 释放到临时目录并交给 MediaPlayer（WPF 不能直接播 pack:// 资源）。</summary>
+    private static string WineAudioPath()
+    {
+        var dir = Path.Combine(AppContext.BaseDirectory, "Launcher", "audio");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "bangyouwine.mp3");
+    }
+
+    private static bool WineAudioCached()
+    {
+        try
+        {
+            var p = WineAudioPath();
+            return File.Exists(p) && new FileInfo(p).Length > 100_000;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>把内嵌资源里的 mp3 释放到 Launcherudio 下（只做一次）。</summary>
+    private bool EnsureWineAudioFile()
+    {
+        var target = WineAudioPath();
+        try
+        {
+            if (File.Exists(target) && new FileInfo(target).Length > 100_000) return true;
+
+            var res = Application.GetResourceStream(new Uri("pack://application:,,,/Assets/bangyouwine.mp3"));
+            if (res == null) return false;
+            using (var src = res.Stream)
+            using (var dst = File.Create(target))
+                src.CopyTo(dst);
+            return new FileInfo(target).Length > 100_000;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>把缓存里的音频交给播放器。</summary>
+    private bool OpenWineAudio()
+    {
+        try
+        {
+            var path = WineAudioPath();
+            if (!File.Exists(path)) return false;
+            _winePlayer.Open(new Uri(path));
+            _winePlayerReady = true;
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private void PlayWineAudio()
+    {
+        try
+        {
+            if (!_winePlayerReady && !OpenWineAudio()) return;
+            _wineWantPlay = true;
+            _winePlayer.Stop();
+            _winePlayer.Position = TimeSpan.Zero;
+            _winePlayer.Play();
+        }
+        catch { }
+    }
+
+    private void StopWineAudio()
+    {
+        _wineWantPlay = false;
+        try { _winePlayer.Stop(); } catch { }
+    }
+
+    private void OnWineAudioEnded()
+    {
+        // 音频播完 → 动作一起停（保持坐姿，不自动起身）
+        if (!_winePlaying) return;
+        _winePlaying = false;
+        _wineClock = null;
+        SetSquash(1, 1);
+        _sitOffset.OffsetY = SitDrop;
+        _leftArmRotation.Angle = -36;
+        _rightArmRotation.Angle = -36;
+        _headRotation.Angle = 0;
+        _wineSitting = true;
+        WineBtn.Content = "邦友的酒 · 起身";
+    }
+
+    /// <summary>本次动画时长：以音频长度为准，没有音频就退回 5 分钟。</summary>
+    private double WineLength()
+    {
+        if (_wineAudioSeconds > 1) return Math.Min(WineTotalSeconds, _wineAudioSeconds);
+        return WineTotalSeconds;
+    }
+
+    private static string FormatLeft(double seconds)
+    {
+        var left = (int)Math.Ceiling(Math.Max(0, seconds));
+        return (left / 60) + ":" + (left % 60).ToString("00");
+    }
+
+    private void SetSquash(double y, double xz)
+    {
+        _squash.ScaleY = Math.Clamp(y, 0.45, 1.45);
+        _squash.ScaleX = _squash.ScaleZ = Math.Clamp(xz, 0.75, 1.45);
+    }
+
+    /// <summary>
+    /// 一拍内的压缩曲线（x: 0→1）。
+    /// 前 30% 平滑压下去，后 70% 平滑弹回，末尾带一点点过冲，
+    /// 全程 sin² 型缓动，没有瞬间位移，所以看起来是"软"的。
+    /// </summary>
+    private static double BeatShape(double x)
+    {
+        x = Math.Clamp(x, 0, 0.999);
+        const double down = 0.45;   // 下压/回弹几乎各占一半，节奏更平均
+        double v;
+        if (x < down)
+        {
+            var u = x / down;
+            v = u * u * (3 - 2 * u);            // smoothstep 压下去
+        }
+        else
+        {
+            var u = (x - down) / (1 - down);
+            v = 1 - u * u * (3 - 2 * u);        // smoothstep 弹回来
+            // 回弹过冲：越过 0 一点再收住
+            v -= 0.14 * Math.Exp(-5.0 * u) * Math.Sin(Math.PI * u);
+        }
+        return v;
+    }
+
+    private async Task AnimateAsync(double seconds, Action<double> frame, CancellationToken token)
+    {
+        var sw = Stopwatch.StartNew();
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            var p = Math.Min(1.0, sw.Elapsed.TotalSeconds / seconds);
+            frame(p);
+            if (p >= 1.0) break;
+            await Task.Delay(16);
+        }
+    }
+
+    private static double EaseOutBack(double p)
+    {
+        const double c1 = 1.70158, c3 = c1 + 1;
+        return 1 + c3 * Math.Pow(p - 1, 3) + c1 * Math.Pow(p - 1, 2);
+    }
+
+    /// <summary>
+    /// 切换动作：先把当前姿势平滑过渡到目标姿势（0.3s），再启动循环动作，
+    /// 避免瞬间跳变（和「邦友的酒」的过渡手感一致）。
+    /// </summary>
+    private async void ToggleMotion(MotionMode mode)
     {
         if (_poseActive && _motionMode == mode)
         {
             _walkTimer.Stop();
-            ResetPose();
+            await BlendPoseAsync(PoseState.Zero, 0.30);
             _poseActive = false;
             return;
         }
 
-        ResetPose();
+        _walkTimer.Stop();
+        _winePlaying = false;
+        _wineClock = null;
+        SetSquash(1, 1);
+
+        var target = mode switch
+        {
+            MotionMode.Sit => PoseState.Sitting,
+            MotionMode.Swim => PoseState.Swimming,
+            _ => PoseState.Zero
+        };
+
+        await BlendPoseAsync(target, 0.30);
+
         _motionMode = mode;
         _walkTime = 0;
         _poseActive = true;
-        if (mode == MotionMode.Sit)
+        if (mode != MotionMode.Sit) _walkTimer.Start();
+    }
+
+    /// <summary>姿势快照：用于两个动作之间做线性混合。</summary>
+    private readonly record struct PoseState(
+        double Body, double Head, double HeadPitch,
+        double ArmL, double ArmR, double ArmZL, double ArmZR,
+        double LegL, double LegR, double LegYL, double LegYR, double SitY)
+    {
+        public static readonly PoseState Zero = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+        /// <summary>坐下：腿折起、手臂略前、整体下沉 SitDrop。</summary>
+        public static readonly PoseState Sitting =
+            new(0, 0, 0, -36, -36, 0, 0, -81, -81, -18, 18, SitDrop);
+
+        /// <summary>游泳起始姿势（对应 _walkTime = 0 的那一帧）。</summary>
+        public static readonly PoseState Swimming =
+            new(90, 0, 0, 0, 0, 180, 180, 17.2, -17.2, 0, 0, 0);
+    }
+
+    private PoseState CapturePose() => new(
+        _bodyRotation.Angle, _headRotation.Angle, _headPitchRotation.Angle,
+        _leftArmRotation.Angle, _rightArmRotation.Angle,
+        _leftArmZRotation.Angle, _rightArmZRotation.Angle,
+        _leftLegRotation.Angle, _rightLegRotation.Angle,
+        _leftLegYRotation.Angle, _rightLegYRotation.Angle,
+        _sitOffset.OffsetY);
+
+    private void ApplyPose(PoseState s)
+    {
+        _bodyRotation.Angle = s.Body;
+        _headRotation.Angle = s.Head;
+        _headPitchRotation.Angle = s.HeadPitch;
+        _leftArmRotation.Angle = s.ArmL;
+        _rightArmRotation.Angle = s.ArmR;
+        _leftArmZRotation.Angle = s.ArmZL;
+        _rightArmZRotation.Angle = s.ArmZR;
+        _leftLegRotation.Angle = s.LegL;
+        _rightLegRotation.Angle = s.LegR;
+        _leftLegYRotation.Angle = s.LegYL;
+        _rightLegYRotation.Angle = s.LegYR;
+        _sitOffset.OffsetY = s.SitY;
+    }
+
+    private static PoseState LerpPose(PoseState a, PoseState b, double t) => new(
+        a.Body + (b.Body - a.Body) * t,
+        a.Head + (b.Head - a.Head) * t,
+        a.HeadPitch + (b.HeadPitch - a.HeadPitch) * t,
+        a.ArmL + (b.ArmL - a.ArmL) * t,
+        a.ArmR + (b.ArmR - a.ArmR) * t,
+        a.ArmZL + (b.ArmZL - a.ArmZL) * t,
+        a.ArmZR + (b.ArmZR - a.ArmZR) * t,
+        a.LegL + (b.LegL - a.LegL) * t,
+        a.LegR + (b.LegR - a.LegR) * t,
+        a.LegYL + (b.LegYL - a.LegYL) * t,
+        a.LegYR + (b.LegYR - a.LegYR) * t,
+        a.SitY + (b.SitY - a.SitY) * t);
+
+    private async Task BlendPoseAsync(PoseState target, double seconds)
+    {
+        var from = CapturePose();
+        var sw = Stopwatch.StartNew();
+        while (true)
         {
-            _walkTimer.Stop();
-            ApplySittingPose();
-            return;
+            var p = Math.Min(1.0, sw.Elapsed.TotalSeconds / seconds);
+            var e = p * p * (3 - 2 * p);       // smoothstep，两端都缓
+            ApplyPose(LerpPose(from, target, e));
+            if (p >= 1.0) break;
+            await Task.Delay(16);
         }
-        _walkTimer.Start();
     }
 
     private void WalkTimer_Tick(object? sender, EventArgs e)
