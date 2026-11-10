@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Net.Http;
 using System.IO;
 using System.Windows;
@@ -46,6 +46,11 @@ public partial class SkinPreviewPage : Page
     private double _wineAudioSeconds;
     private bool _winePlayerReady;
     private bool _wineWantPlay;
+    // 当前「持有播放器」的页面实例。切页后旧实例若还挂着 MediaPlayer，
+    // 会继续出声且不释放 → 再点一次就叠加一层。这里跨实例兜底。
+    private static SkinPreviewPage? _activeWinePage;
+    private EventHandler? _wineMediaOpened;
+    private EventHandler? _wineMediaEnded;
     private const double WineBpm = 120.0;   // 4/4 拍：0.5s 一拍，2s 一小节
     private bool _dragging;
     private Point _lastMouse;
@@ -71,18 +76,31 @@ public partial class SkinPreviewPage : Page
         _playerModel.Transform = playerTransform;
         SceneRoot.Children.Add(_playerModel);
         _walkTimer.Tick += WalkTimer_Tick;
-        _winePlayer.MediaOpened += (_, _) =>
+        _wineMediaOpened = (_, _) =>
         {
-            if (_winePlayer.NaturalDuration.HasTimeSpan)
-                _wineAudioSeconds = _winePlayer.NaturalDuration.TimeSpan.TotalSeconds;
-            if (_wineWantPlay)
+            if (!_winePlayerReady) return;
+            try
             {
-                try { _winePlayer.Position = TimeSpan.Zero; _winePlayer.Play(); } catch { }
+                if (_winePlayer.NaturalDuration.HasTimeSpan)
+                    _wineAudioSeconds = _winePlayer.NaturalDuration.TimeSpan.TotalSeconds;
+                if (_wineWantPlay)
+                {
+                    _winePlayer.Position = TimeSpan.Zero;
+                    _winePlayer.Play();
+                }
             }
+            catch { }
         };
-        _winePlayer.MediaEnded += (_, _) => OnWineAudioEnded();
+        _wineMediaEnded = (_, _) => OnWineAudioEnded();
+        _winePlayer.MediaOpened += _wineMediaOpened;
+        _winePlayer.MediaEnded += _wineMediaEnded;
         Loaded += (_, _) =>
         {
+            // 兜底：上一个实例还在出声就先掐掉（切页时 Unloaded 偶尔不触发）
+            if (_activeWinePage != null && !ReferenceEquals(_activeWinePage, this))
+                _activeWinePage.StopWineCompletely();
+            _activeWinePage = this;
+
             LoadCurrentSkin();
             BeginEnterAnimation();
             CompositionTarget.Rendering += ViewRendering;
@@ -97,6 +115,10 @@ public partial class SkinPreviewPage : Page
             if (_hostWindow != null)
                 _hostWindow.PreviewMouseMove -= HostWindow_MouseMove;
             _hostWindow = null;
+
+            // 离开预览页 → 彩蛋立即停止并释放播放器，音频不跟着跑到别的页面
+            StopWineCompletely();
+            if (ReferenceEquals(_activeWinePage, this)) _activeWinePage = null;
         };
     }
 
@@ -150,6 +172,10 @@ public partial class SkinPreviewPage : Page
 
     private void LoadCurrentSkin()
     {
+        // 换皮肤也等于打断彩蛋：音乐不能留在新皮肤上继续响
+        if (_winePlaying || _wineSitting || _wineWantPlay)
+            StopWineCompletely();
+
         if (App.Settings.Data.AuthMode != AuthModes.Offline)
         {
             _playerModel.Children.Clear();
@@ -296,12 +322,10 @@ public partial class SkinPreviewPage : Page
 
     private void Preset_Click(object sender, RoutedEventArgs e)
     {
-        _winePlaying = false;
-        _wineClock = null;
-        if (_wineSitting) WineBtn.Content = "邦友的酒";
-        _wineSitting = false;
-        SetSquash(1, 1);
-        _sitOffset.OffsetY = 0;
+        // 切动作 = 打断彩蛋：音乐必须一起停，否则会边走路边放歌
+        if (_winePlaying || _wineSitting || _wineWantPlay)
+            StopWineCompletely();
+
         if (sender is not Button { Tag: string name }) return;
         if (name == "默认")
         {
@@ -538,6 +562,40 @@ public partial class SkinPreviewPage : Page
     {
         _wineWantPlay = false;
         try { _winePlayer.Stop(); } catch { }
+    }
+
+    /// <summary>
+    /// 彻底收摊：停播 + 关闭播放器 + 姿势归位。
+    /// 离开预览页、或被新实例顶替时调用 —— 不这么做的话 MediaPlayer 会继续
+    /// 播着旧实例的音频，页面上再点一次就变成两层声音叠在一起。
+    /// </summary>
+    private void StopWineCompletely()
+    {
+        _winePlaying = false;
+        _wineClock = null;
+        _wineWantPlay = false;
+        _wineSitting = false;
+        _wineAudioSeconds = 0;
+
+        try { _winePlayer.Stop(); } catch { }
+        try { _winePlayer.Close(); } catch { }
+        _winePlayerReady = false;
+
+        try
+        {
+            SetSquash(1, 1);
+            _sitOffset.OffsetY = 0;
+            _leftLegRotation.Angle = 0;
+            _rightLegRotation.Angle = 0;
+            _leftLegYRotation.Angle = 0;
+            _rightLegYRotation.Angle = 0;
+            _leftArmRotation.Angle = 0;
+            _rightArmRotation.Angle = 0;
+            _headRotation.Angle = 0;
+            _poseActive = false;
+            if (WineBtn != null) WineBtn.Content = "邦友的酒";
+        }
+        catch { }
     }
 
     private void OnWineAudioEnded()

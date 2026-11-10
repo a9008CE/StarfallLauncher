@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 
 namespace QuartzLauncher.Models;
 
@@ -28,6 +28,17 @@ public class AppPaths
     public static AppPaths FromBaseDirectory(string baseDirectory)
     {
         var baseDir = Path.GetFullPath(baseDirectory);
+
+        // 版本化更新：新版跑在 <安装根>\versions\<版本>\ 下，
+        // 数据目录必须仍指回安装根，否则升级一次用户配置就"消失"了。
+        // 形如 <安装根>ersions\<版本>\ → 数据目录回到安装根
+        var dirInfo = new DirectoryInfo(baseDir);
+        if (string.Equals(dirInfo.Parent?.Name, "versions", StringComparison.OrdinalIgnoreCase)
+            && dirInfo.Parent?.Parent != null)
+        {
+            baseDir = dirInfo.Parent.Parent.FullName;
+        }
+
         var root = Path.Combine(baseDir, "Launcher");
         var minecraftDir = Path.Combine(baseDir, ".minecraft");
         var legacyMinecraftDir = Path.Combine(root, ".minecraft");

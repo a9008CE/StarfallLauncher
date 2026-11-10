@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -109,6 +109,7 @@ public partial class App : Application
             }
 
             Paths = AppPaths.Default();
+
             Paths.EnsureConfiguration();
             SetDllDirectory(Paths.Root);
             var portableTemp = Paths.TempDir;

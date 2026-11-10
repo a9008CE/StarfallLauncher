@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.InteropServices;
@@ -680,17 +680,28 @@ public partial class MainWindow : Window
                 ? Settings.DefaultUpdateManifestUrl
                 : App.Settings.Data.UpdateManifestUrl;
             var manifest = await UpdateService.CheckAsync(manifestUrl);
-            if (manifest == null) return;
-            var result = AnimatedMessageBox.Show(
-                $"发现新版本 {manifest.Version}。\n\n{manifest.Notes}\n\n是否现在下载并更新？",
-                "发现更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
-            if (result != MessageBoxResult.Yes) return;
-            var package = await UpdateService.DownloadPackageAsync(manifest, App.Paths.TempDir);
-            UpdateService.StartApplyAndExit(package, manifest);
+            if (manifest != null)
+            {
+                var result = AnimatedMessageBox.Show(
+                    $"发现新版本 {manifest.Version}。\n\n{manifest.Notes}\n\n是否现在下载并更新？",
+                    "发现更新", MessageBoxButton.YesNo, MessageBoxImage.Information);
+                if (result == MessageBoxResult.Yes)
+                {
+                    var package = await UpdateService.DownloadPackageAsync(manifest, App.Paths.TempDir);
+                    UpdateService.StartApplyAndExit(package, manifest);
+                }
+            }
         }
         catch
         {
             // Automatic checks stay silent when the local update service is unavailable.
+        }
+
+        // 临时公告：后台随时发布、按版本区间投递（1.1.13 以下才收到之类）
+        try { await AnnouncementService.ShowPendingAsync(this); }
+        catch
+        {
+            // 公告失败不能影响启动
         }
     }
 
